@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F4F5F7">
+  <title>Break+ ESTG · SAS - IPVC</title>
+  <link rel="icon" href="images/logo-break-estg.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared/tokens.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+
+  <!-- Ícones (sprite SVG). Para adicionar um ícone: novo <symbol> + <use href="#i-nome"> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v3M10 2v3M14 2v3"/></symbol>
+      <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l3-2 2 2 3-2 3 2 2-2 3 2V2l-3 2-2-2-3 2-3-2-2 2Z"/><path d="M8 8h8M8 12h8"/></symbol>
+      <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M20 7H5a2 2 0 0 1 0-4h13v4Z"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><path d="M16 14h2"/></symbol>
+      <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18"/><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-utensils" viewBox="0 0 24 24"><path d="M3 2v7a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3Zm0 0v7"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app">
+
+    <!-- Topo (sempre visível) -->
+    <header class="top">
+      <div class="logo-wrap">
+        <picture>
+          <source srcset="images/logo-break-estg-dark.png" media="(prefers-color-scheme: dark)">
+          <img class="logo" src="images/logo-break-estg.png" alt="Break+ ESTG" width="119" height="41">
+        </picture>
+      </div>
+      <div class="bal">
+        <div><small>Saldo</small><span id="balance"></span></div>
+        <button class="add" data-action="go" data-view="wallet" aria-label="Carregar saldo">
+          <svg class="ic"><use href="#i-plus"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Vista: Bar -->
+    <section class="view" id="view-bar">
+      <p class="sub">SAS - IPVC</p>
+      <h1><span class="soft">Olá,</span> <span id="greet-name"></span></h1>
+
+      <div class="cap">
+        <span class="dot"></span>
+        <div class="cap-main"><b id="bar-name"></b><small id="bar-hours"></small></div>
+        <span class="cap-wait" id="bar-wait"></span>
+      </div>
+
+      <div class="paused-note" id="paused-note" hidden>
+        <b>Pedidos na hora em pausa</b>
+        <span>O bar está com muita fila. Podes continuar a reservar para mais tarde.</span>
+      </div>
+
+      <div class="ticket" id="ticket-banner">
+        <i><svg class="ic"><use href="#i-bell"/></svg></i>
+        <div><strong id="ticket-title"></strong><span id="ticket-sub"></span></div>
+        <button data-action="show-ticket">Ver senha</button>
+      </div>
+
+      <div class="resv-banner" id="resv-banner" hidden>
+        <i><svg class="ic"><use href="#i-calendar"/></svg></i>
+        <div><small>Próxima reserva</small><strong id="resv-title"></strong><span id="resv-sub"></span></div>
+        <button data-action="show-ticket">Ver senha</button>
+      </div>
+
+      <div class="list-bar">
+        <div><b id="menu-count"></b><small id="menu-filters"></small></div>
+        <button class="fbtn" data-action="open-filters" aria-haspopup="dialog">
+          <svg class="ic"><use href="#i-sliders"/></svg>Filtros<span class="n" id="filters-badge"></span>
+        </button>
+      </div>
+
+      <div class="list" id="menu-list"></div>
+    </section>
+
+    <!-- Outras vistas: o conteúdo é gerado em js/ui.js -->
+    <section class="view" id="view-orders" hidden><h1 class="view-title">Pedidos</h1><div class="body"></div></section>
+    <section class="view" id="view-wallet" hidden><h1 class="view-title">Saldo</h1><div class="body"></div></section>
+    <section class="view" id="view-more" hidden><h1 class="view-title">Mais</h1><div class="body"></div></section>
+  </div>
+
+  <!-- Bandeja do carrinho (aparece quando há itens) -->
+  <div class="tray" id="tray">
+    <div><span id="tray-count"></span><small id="tray-total"></small></div>
+    <button class="cta" data-action="open-cart">Ver pedido</button>
+  </div>
+
+  <!-- Navegação inferior (a ordem dos botões tem de bater com VIEWS em js/ui.js) -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <i class="nav-ind" aria-hidden="true"></i>
+      <button data-action="go" data-view="bar" class="on" aria-current="page"><span><svg class="ic"><use href="#i-coffee"/></svg></span>Bar</button>
+      <button data-action="go" data-view="orders"><span><svg class="ic"><use href="#i-receipt"/></svg></span>Pedidos</button>
+      <button data-action="go" data-view="wallet"><span><svg class="ic"><use href="#i-wallet"/></svg></span>Saldo</button>
+      <button data-action="go" data-view="more"><span><svg class="ic"><use href="#i-dots"/></svg></span>Mais</button>
+    </div>
+  </nav>
+
+  <!-- Painel deslizante (filtros, carrinho, detalhes, senha) e aviso -->
+  <div class="sheet" id="sheet" aria-hidden="true"><div class="pane" id="pane" role="dialog" aria-modal="true"></div></div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <!-- Login: email + password, depois PIN do cartão (keypad 0–9). Lógica em js/auth.js -->
+  <div class="auth" id="auth">
+    <div class="auth-card">
+      <picture>
+        <source srcset="images/logo-break-estg-dark.png" media="(prefers-color-scheme: dark)">
+        <img class="logo" src="images/logo-break-estg.png" alt="Break+ ESTG" width="119" height="41">
+      </picture>
+
+      <form class="auth-step" id="auth-s1" autocomplete="on">
+        <h1>Entrar</h1>
+        <p>Usa a tua conta do IPVC.</p>
+        <input class="auth-field" id="auth-email" type="email" placeholder="Email" autocomplete="username" required>
+        <input class="auth-field" id="auth-pass" type="password" placeholder="Password" autocomplete="current-password" required>
+        <button class="auth-btn" type="submit">Continuar</button>
+      </form>
+
+      <div class="auth-step" id="auth-s2" hidden>
+        <h1 id="auth-hello">Olá</h1>
+        <p>Introduz o PIN do cartão da escola.</p>
+        <div class="pin-dots" id="pin-dots" aria-label="PIN"><i></i><i></i><i></i><i></i></div>
+        <div class="keypad" id="auth-keypad">
+          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+          <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+          <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+          <button class="spacer" tabindex="-1" aria-hidden="true"></button>
+          <button data-key="0">0</button>
+          <button class="back" data-key="back" aria-label="Apagar">⌫</button>
+        </div>
+        <button class="auth-link" id="auth-back" type="button">Usar outra conta</button>
+      </div>
+
+      <div class="auth-err" id="auth-err" role="alert"></div>
+    </div>
+  </div>
+
+  <!-- Ordem importa: dados partilhados → store → estado → UI → eventos -->
+  <script src="js/config.js"></script>
+  <script src="shared/data.js"></script>
+  <script src="shared/util.js"></script>
+  <script src="shared/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

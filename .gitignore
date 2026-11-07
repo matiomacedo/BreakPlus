@@ -1,0 +1,5 @@
+node_modules/
+.env
+# Chave do terminal (copiar de terminal/config.example.js)
+terminal/config.js
+.DS_Store
