@@ -36,8 +36,8 @@ async function resetData() {
     { itemId: 2, name: 'Croissant', price: 1.6, stock: 3 },
   ]);
   await User.create([
-    { name: 'Gonçalo Silva', role: 'student', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5 },
-    { name: 'Ana Costa', role: 'teacher', roleLabel: 'Docente', email: 'ana@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('4321'), balance: 8 },
+    { name: 'Gonçalo Silva', role: 'student', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5, avatar: '/ProfilePictureUser/goncalo.svg' },
+    { name: 'Ana Costa', role: 'teacher', roleLabel: 'Docente', email: 'ana@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('4321'), balance: 8, avatar: 'ana.svg' },
   ]);
   await Setting.create({ _id: 'bar', paused: false, lastNumber: 100 });
 }

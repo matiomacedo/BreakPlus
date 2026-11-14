@@ -71,6 +71,15 @@ A app dos alunos pode ser instalada no ecrã principal e abre em ecrã completo 
 
 > Ao alterar ficheiros da app, sobe `CACHE_VERSION` em `sw.js` para os clientes antigos receberem a versão nova.
 
+## Fotografia de perfil
+
+O avatar do ecrã **Mais** mostra a fotografia do utilizador quando existe; sem imagem, mostra a inicial do nome.
+
+- A base de dados guarda o URL no campo `avatar` do utilizador (`server/src/models.js`). Pode ser um path completo (`/ProfilePictureUser/ana.svg`) ou só o nome do ficheiro (`ana.svg`); o cliente completa os nomes com `/ProfilePictureUser/`.
+- As imagens ficam em `ProfilePictureUser/` (ver o README da pasta). Os ficheiros de demonstração são `goncalo.svg` e `ana.svg`.
+- O campo é devolvido por `publicUser()` no login, no PIN e em `GET /api/auth/me`, por isso a app já o tem ao entrar e também o guarda na conta em cache para abrir sem rede.
+- Se a imagem falhar, o `<img>` é removido e a inicial continua visível como fallback.
+
 ## Avisos do pedido como notificação do sistema
 
 O toast dentro da app continua a existir, mas quando a app está noutro separador ou em segundo plano o aluno recebe uma **notificação do sistema** (Notification API + service worker).
@@ -111,6 +120,7 @@ shared/
   tokens.css          cores e sombras comuns às duas apps
 server/               API (ver server/README.md)
 images/               logótipo e fotos dos pratos (nomes em shared/data.js)
+ProfilePictureUser/   fotografias de perfil (avatar dos utilizadores)
 ```
 
 Cada app cria a sua `Store` com `createStore()` (`shared/api.js`), injetando a forma de falar com o servidor

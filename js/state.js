@@ -46,7 +46,7 @@ const state = {
 };
 
 /* O aluno que está com sessão iniciada nesta app */
-const ME = { customer: 'Gonçalo Silva', role: 'Estudante' };
+const ME = { customer: 'Gonçalo Silva', role: 'Estudante', avatar: '' };
 
 /* ---------- Dados partilhados (lidos da store) ---------- */
 

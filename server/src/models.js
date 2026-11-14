@@ -5,6 +5,7 @@ const User = model('User', new Schema({
   role: { type: String, enum: ['student', 'teacher'], default: 'student' },
   roleLabel: { type: String, default: 'Estudante' },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  avatar: { type: String, default: '', trim: true },   // URL ou nome do ficheiro em ProfilePictureUser/
   passwordHash: { type: String, required: true, select: false },
   pinHash: { type: String, required: true, select: false },   // PIN (4 dígitos) do cartão da escola
   failCount: { type: Number, default: 0, select: false },
@@ -21,7 +22,7 @@ const Product = model('Product', new Schema({
 const Order = model('Order', new Schema({
   number: { type: Number, unique: true, index: true },
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
-  customer: String, role: String,
+  customer: String, role: String,   // cópia no momento do pedido (fallback se a conta for apagada)
   type: { type: String, enum: ['now', 'reservation'] },
   status: { type: String, enum: ['reserved', 'received', 'preparing', 'ready', 'done', 'cancelled'] },
   items: { type: Schema.Types.Mixed },                     // { itemId: qty }

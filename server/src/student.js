@@ -5,11 +5,15 @@ const { User, Product, Order, Transaction } = require('./models');
 const { verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
-const { r2, barSettings, queueStats, cancelOrder } = require('./orders');
+const { r2, barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const { loadSharedData } = require('./shared-data');
 
 const { RESERVATION } = loadSharedData();     // mesmas regras que a app (shared/data.js)
-const orderOut = (o, uid) => ({ ...o.toObject(), mine: String(o.user) === String(uid) });
+const orderOut = (o, uid) => {
+  const obj = o.toObject();
+  const userId = obj.user && obj.user._id ? obj.user._id : obj.user;
+  return { ...obj, user: userId, mine: String(userId) === String(uid), ...currentCustomer(o) };
+};
 
 const pad = (n) => String(n).padStart(2, '0');
 const localDateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -67,7 +71,7 @@ function studentRouter() {
   r.get('/state', auth, wrap(async (req, res) => {
     const [products, set, orders, txs, stats] = await Promise.all([
       Product.find(), barSettings(),
-      Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200),
+      Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       Transaction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50),
       queueStats(),
     ]);
@@ -80,7 +84,10 @@ function studentRouter() {
   }));
 
   r.get('/menu', auth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
-  r.get('/orders/mine', auth, wrap(async (req, res) => res.json(await Order.find({ user: req.user._id }).sort({ number: -1 }))));
+  r.get('/orders/mine', auth, wrap(async (req, res) => {
+    const orders = await Order.find({ user: req.user._id }).sort({ number: -1 }).populate('user', USER_FIELDS);
+    res.json(orders.map((o) => orderOut(o, req.user._id)));
+  }));
 
   /* ---------- Pedidos ---------- */
 
@@ -124,6 +131,7 @@ function studentRouter() {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
       if (o.status !== 'reserved' || o.pickupAt - Date.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
+    await out.populate('user', USER_FIELDS);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 

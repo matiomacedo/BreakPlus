@@ -345,7 +345,7 @@ Auth.start({
   key: 'bp_token_student',
   roles: ['student', 'teacher'],
   onEnter: async (user) => {
-    Object.assign(ME, { customer: user.name, role: user.roleLabel });
+    Object.assign(ME, { customer: user.name, role: user.roleLabel, avatar: user.avatar || '' });
     document.getElementById('greet-name').textContent = user.name.split(' ')[0];
     await Store.start();
     renderAll(); primeStore(); Store.subscribe(onStoreChange);

@@ -14,7 +14,7 @@
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v10';
+const CACHE_VERSION = 'breakplus-v11';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 
