@@ -7,14 +7,14 @@
      servidor e a app mostra o aviso "Sem ligação" quando não consegue falar
      com ele (ver js/app.js).
    - Serve também de base para as notificações do sistema. O handler `push`
-     fica pronto para Web Push, mas o envio exige um servidor de push com
-     VAPID (ainda não implementado; ver README.md).
+     mostra os avisos enviados pelo servidor (Web Push com VAPID, ver
+     server/src/push.js): chegam mesmo com a app fechada.
 
    Ao mudar ficheiros da app, sobe CACHE_VERSION para os clientes antigos
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v14';
+const CACHE_VERSION = 'breakplus-v15';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 

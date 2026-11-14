@@ -41,9 +41,18 @@ const Transaction = model('Transaction', new Schema({
   order: Number,
 }, { timestamps: true }));
 
-// Estado global do bar (pausa) + contador de senhas
-const Setting = model('Setting', new Schema({
-  _id: String, paused: { type: Boolean, default: false }, lastNumber: { type: Number, default: 100 },
+// Subscrição Web Push de um dispositivo (uma por endpoint; a mesma conta pode ter várias)
+const PushSubscription = model('PushSubscription', new Schema({
+  user: { type: Schema.Types.ObjectId, ref: 'User', index: true, required: true },
+  endpoint: { type: String, required: true, unique: true },
+  keys: { p256dh: String, auth: String },
+  createdAt: { type: Date, default: Date.now },
 }));
 
-module.exports = { User, Product, Order, Transaction, Setting };
+// Estado global do bar (pausa) + contador de senhas + chaves VAPID (geradas uma vez)
+const Setting = model('Setting', new Schema({
+  _id: String, paused: { type: Boolean, default: false }, lastNumber: { type: Number, default: 100 },
+  vapidPublicKey: String, vapidPrivateKey: String,
+}));
+
+module.exports = { User, Product, Order, Transaction, PushSubscription, Setting };

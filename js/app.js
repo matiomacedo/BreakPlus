@@ -39,10 +39,10 @@ window.addEventListener('online', () => {
 
 updateConnectionBanner();
 
-/** Notificação do sistema quando o aluno tem a app noutro separador. */
+/** Aviso do sistema: além do toast, aparece na central de notificações. */
 function notifySystem(title, body, tag) {
   if (!state.prefs.notifications) return;
-  Notifications.notifyIfAway(title, { body, tag });
+  Notifications.show(title, { body, tag });
 }
 
 /**
@@ -62,6 +62,8 @@ function armNotificationPermission() {
       if (result !== 'granted') {
         state.prefs.notifications = false;
         persistPrefs();
+      } else {
+        Notifications.syncPush();             // subscrição Web Push (app fechada)
       }
       if (state.view === 'more') renderMore();
     });
@@ -213,7 +215,12 @@ const ACTIONS = {
     if (d.key === 'notifications') {
       const hint = el.closest('.mrow')?.querySelector('small');
       if (hint) hint.textContent = Notifications.statusHint();
-      if (state.prefs.notifications) toast('Avisos do sistema ativados');
+      if (state.prefs.notifications) {
+        Notifications.syncPush();                // passa a receber avisos com a app fechada
+        toast('Avisos do sistema ativados');
+      } else {
+        Notifications.stopPush();
+      }
     }
   },
   'test-notification': async () => {
@@ -352,6 +359,7 @@ Auth.start({
     renderAll(); primeStore(); Store.subscribe(onStoreChange);
     updateConnectionBanner();
     armNotificationPermission();
+    Notifications.syncPush();              // mantém a subscrição Web Push deste dispositivo
     setInterval(renderBarInfo, 30000);      // a fila e as horas das reservas mudam com o tempo
   },
 });

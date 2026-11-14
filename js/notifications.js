@@ -1,9 +1,11 @@
 /* ==========================================================================
    notifications.js — avisos do sistema (Notification API + service worker).
 
-   - O toast dentro da app continua a ser o aviso principal quando a app está
-     visível. Quando está noutro separador / em segundo plano, usamos uma
-     notificação do sistema para o aluno não perder o "pedido pronto".
+   - O toast dentro da app é o aviso imediato; além dele, cada mudança de
+     pedido aparece também na central de notificações do telemóvel.
+   - Com a app fechada só o Web Push funciona: o servidor envia a notificação
+     para as subscrições guardadas (ver server/src/push.js e o handler `push`
+     em sw.js). `syncPush()` cria/renova essa subscrição.
    - No telemóvel, `new Notification()` não é permitido: é o service worker
      que mostra a notificação (por isso js/pwa.js regista o sw.js).
    - Respeita state.prefs.notifications (guardada em localStorage; ver
@@ -14,6 +16,9 @@ const Notifications = (() => {
   const supported = () => typeof window !== 'undefined' && 'Notification' in window;
   const permission = () => (supported() ? Notification.permission : 'unsupported');
   const needsPermission = () => permission() === 'default';
+  const secure = () => /^https:$/.test(location.protocol)
+    || ['localhost', '127.0.0.1'].includes(location.hostname);
+  const pushSupported = () => supported() && secure() && 'serviceWorker' in navigator && 'PushManager' in window;
 
   /** Pede permissão (tem de ser chamado a partir de um clique/toque). */
   async function requestPermission() {
@@ -34,6 +39,18 @@ const Notifications = (() => {
       if (!registration) return null;                 // ainda não há SW: usa a API direta
       if (registration.active) return registration;
       return await navigator.serviceWorker.ready;     // SW a instalar: espera que fique ativo
+    } catch {
+      return null;
+    }
+  }
+
+  /** Registo ativo para o Web Push (espera pelo SW em vez de desistir). */
+  async function pushRegistration() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration && registration.active) return registration;
+      return await navigator.serviceWorker.ready;
     } catch {
       return null;
     }
@@ -73,15 +90,67 @@ const Notifications = (() => {
     }
   }
 
+  /* ---------- Web Push (avisos com a app fechada) ---------- */
+
+  const toBytes = (value) => {
+    const base64 = (value + '='.repeat((4 - value.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  };
+  const toBase64Url = (bytes) => btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
   /**
-   * Notificação do sistema apenas quando o aluno não está a ver a app.
-   * Com a app visível, o toast chega (e não duplicamos o aviso).
+   * Garante que este dispositivo está subscrito para receber avisos com a app
+   * fechada. Silencioso: se o browser/servidor não der, as notificações locais
+   * continuam a funcionar.
    */
-  function notifyIfAway(title, details = {}) {
-    if (!state.prefs.notifications) return false;
-    // "Ausente" = noutro separador/app ou janela sem foco (dois ecrãs lado a lado).
-    if (!document.hidden && document.hasFocus()) return false;
-    return show(title, details);
+  async function syncPush() {
+    if (!pushSupported() || !state.prefs.notifications || permission() !== 'granted') return false;
+    const registration = await pushRegistration();
+    if (!registration || !registration.pushManager) return false;
+
+    try {
+      const { data } = await requestJson('/api/push/public-key');
+      if (!data || !data.ok || !data.key) return false;
+
+      let sub = await registration.pushManager.getSubscription();
+      // Se as chaves do servidor mudaram (ex.: base de dados recriada), renova.
+      const current = sub && sub.options && sub.options.applicationServerKey
+        ? toBase64Url(new Uint8Array(sub.options.applicationServerKey))
+        : null;
+      if (sub && current && current !== data.key) {
+        await sub.unsubscribe();
+        sub = null;
+      }
+      if (!sub) {
+        sub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: toBytes(data.key),
+        });
+      }
+
+      const saved = await Auth.api('/api/push/subscribe', { subscription: sub.toJSON() });
+      return !!(saved && saved.ok);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Cancela a subscrição deste dispositivo (avisos desligados). */
+  async function stopPush() {
+    if (!pushSupported()) return;
+    try {
+      const registration = await pushRegistration();
+      const sub = registration && await registration.pushManager.getSubscription();
+      if (!sub) return;
+      await Auth.api('/api/push/unsubscribe', { endpoint: sub.endpoint });
+      await sub.unsubscribe();
+    } catch {
+      // Sem rede: fica para a próxima sincronização.
+    }
   }
 
   /** Texto para a linha das preferências (ecrã "Mais"). */
@@ -89,11 +158,11 @@ const Notifications = (() => {
     if (!state.prefs.notifications) return 'Desativados';
     if (!supported()) return 'Este dispositivo não suporta notificações';
     switch (permission()) {
-      case 'granted': return 'Pedido pronto, senha chamada, reservas e anulações';
+      case 'granted': return 'Pedido pronto, senha chamada e anulações — mesmo com a app fechada';
       case 'denied': return 'Bloqueadas nas definições do browser';
       default: return 'Toca para permitir notificações do sistema';
     }
   }
 
-  return { supported, permission, needsPermission, requestPermission, show, notifyIfAway, statusHint };
+  return { supported, permission, needsPermission, requestPermission, show, syncPush, stopPush, statusHint };
 })();

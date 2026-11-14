@@ -156,6 +156,29 @@ const Auth = (() => {
       if (el('auth').hidden || el('auth-s2').hidden) return;
       if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('back');
     });
+
+    /* Teclado do telemóvel: rola o campo focado para ficar acima do teclado.
+       O zoom continua bloqueado (shared/nozoom.js); aqui só se ajusta o scroll. */
+    const auth = el('auth');
+    const isField = (node) => node instanceof Element && /^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName);
+    const revealFocused = () => {
+      const field = document.activeElement;
+      if (!field || !isField(field) || !auth.contains(field)) return;
+      const vv = window.visualViewport;
+      const top = vv ? vv.offsetTop : 0;
+      const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const rect = field.getBoundingClientRect();
+      const margin = 16;
+      if (rect.bottom > bottom - margin) auth.scrollTop += rect.bottom - (bottom - margin);
+      else if (rect.top < top + margin) auth.scrollTop -= (top + margin) - rect.top;
+    };
+    auth.addEventListener('focusin', (event) => {
+      if (isField(event.target)) setTimeout(revealFocused, 320);   // espera o teclado abrir
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => setTimeout(revealFocused, 60));
+    }
+
     if (token()) resume();
     else { bootDone(); el('auth').hidden = false; }
   }

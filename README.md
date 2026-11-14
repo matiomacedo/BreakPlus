@@ -147,16 +147,21 @@ O avatar do ecrã **Mais** mostra a fotografia do utilizador quando existe; sem 
 
 ## Avisos do pedido como notificação do sistema
 
-O toast dentro da app continua a existir, mas quando a app está noutro separador ou em segundo plano o aluno recebe uma **notificação do sistema** (Notification API + service worker).
+O toast dentro da app continua a existir, mas cada mudança de pedido aparece também na **central de notificações** do telemóvel (Notification API + service worker), mesmo com a app aberta.
 
-- A preferência **Aviso de pedido pronto** (ecrã **Mais**) fica guardada em `localStorage` e já não se perde ao recarregar; controla também os avisos de senha chamada, reserva a preparar e anulação.
+- A preferência **Aviso de pedido pronto** (ecrã **Mais**) fica guardada em `localStorage` e já não se perde ao recarregar; controla também os avisos de senha chamada e anulação.
 - Ao ligar a preferência, o browser pede permissão. Se a preferência já vinha ligada, o pedido é feito no primeiro toque na app.
-- Avisos: pedido **pronto**, bar a **chamar a senha**, reserva a começar a ser **preparada** e pedido **anulado pelo bar** (com o valor devolvido).
-- Os avisos reagem às atualizações da `Store` (`shared/api.js`). Hoje a Store atualiza por polling de 2,5 s; quando o [#1 — Atualização em tempo real com WebSockets (Socket.IO)] estiver ligado, os mesmos eventos disparam as notificações sem alterar esta lógica.
+- Avisos: pedido **pronto**, bar a **chamar a senha** e pedido **anulado pelo bar** (com o valor devolvido).
+- Com a app aberta, os avisos reagem às atualizações da `Store` (`shared/api.js`, polling de 2,5 s) e são mostrados pelo service worker.
 
-### Limitação: app fechada (Web Push)
+### App fechada (Web Push)
 
-Enquanto a app estiver aberta/em segundo plano, as notificações funcionam. Com a app **fechada**, seria preciso **Web Push** com um servidor de push (VAPID) e subscrições guardadas no backend — isso está fora do âmbito atual. O handler `push` do `sw.js` já está preparado para quando essa parte existir.
+Com a app **fechada** é o servidor que envia o aviso, por **Web Push**: o terminal muda o estado do pedido e o servidor notifica os dispositivos subscritos desse aluno. A subscrição é criada no primeiro login com os avisos ligados e renovada a cada arranque (`Notifications.syncPush()`); o servidor guarda-a em `PushSubscription`.
+
+- As chaves **VAPID** são geradas automaticamente no primeiro envio e ficam guardadas na coleção `Setting` (`_id: push`). Não é preciso configurar nada no Render.
+- Para as usar a partir do ambiente (opcional), definir `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (por omissão `https://breakplus-one.vercel.app`).
+- No iPhone, o Web Push só funciona com a app **instalada no ecrã principal** (iOS 16.4+). No Android/Chrome funciona no browser e na PWA.
+- As subscrições inválidas (404/410) são apagadas automaticamente.
 
 ### Testar com dois separadores
 
@@ -164,6 +169,7 @@ Enquanto a app estiver aberta/em segundo plano, as notificações funcionam. Com
 2. Deixar a app noutro separador (ou minimizar a janela).
 3. No terminal do bar, avançar um pedido até **Pronto**.
 4. Confirmar que aparece a notificação do sistema com o número do pedido.
+5. Fechar a app por completo e repetir o passo 3: o aviso deve chegar via Web Push (instalar a PWA no iPhone).
 
 ## Estrutura
 
