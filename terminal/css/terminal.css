@@ -24,12 +24,18 @@
 
 * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
 
+/* iOS faz zoom automático ao focar inputs com fonte < 16px. */
+input, textarea, select { font-size: 16px; }
+
+html { touch-action: pan-x pan-y; overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
 body {
   background: var(--bg);
   color: var(--ink);
   font: 400 15px/21px 'Plus Jakarta Sans', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  touch-action: pan-x pan-y;
 }
 body::before {                                   /* brilho suave no topo */
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;

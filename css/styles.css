@@ -21,7 +21,10 @@
 
 * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
 
-html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+/* iOS faz zoom automático ao focar inputs com fonte < 16px. */
+input, textarea, select { font-size: 16px; }
+
+html { scroll-padding-top: env(safe-area-inset-top, 0px); touch-action: pan-x pan-y; overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
   background: var(--bg);
@@ -29,6 +32,7 @@ body {
   font: 400 14px/20px 'Plus Jakarta Sans', system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  touch-action: pan-x pan-y;
 }
 body.locked { overflow: hidden; }
 

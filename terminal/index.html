@@ -7,7 +7,7 @@
        a raiz: o terminal.css dá 404 e carrega o JS da app dos alunos. Alguns servidores (ex.: `npx serve`)
        não redirecionam sozinhos, por isso acrescenta-se a "/" antes de carregar qualquer CSS ou JS. -->
   <script>if (!/(\/|\.html?)$/.test(location.pathname)) location.replace(location.pathname + '/' + location.search + location.hash);</script>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#F4F5F7">
   <title>Break+ Terminal · Bar Central ESTG</title>
   <link rel="icon" href="../icons/terminal-icon-maskable-512.png" sizes="any">
@@ -186,6 +186,7 @@
   <script src="../shared/data.js"></script>
   <script src="../shared/util.js"></script>
   <script src="../shared/api.js"></script>
+  <script src="../shared/nozoom.js"></script>
   <script src="js/store.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>

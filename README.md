@@ -132,6 +132,7 @@ A app dos alunos pode ser instalada no ecrã principal e abre em ecrã completo 
 - **Android (Chrome):** abrir a app em `http(s)://…`, menu ⋮ → **Instalar app** (ou **Adicionar ao ecrã principal**). Confirmar que abre sem barra de endereço e com o ícone do Break+.
 - **iOS (Safari):** **Partilhar** → **Adicionar ao ecrã principal**. Abre a partir do ícone em ecrã completo.
 - O service worker e a instalação exigem `http://localhost` ou HTTPS; por `file://` a app funciona, mas sem cache offline.
+- No telemóvel a app mantém o zoom fixo: o pinch e o duplo-toque estão desativados (`shared/nozoom.js` + `touch-action`), e os campos de login usam 16px para o iOS não ampliar ao focar.
 
 > Ao alterar ficheiros da app, sobe `CACHE_VERSION` em `sw.js` para os clientes antigos receberem a versão nova.
 
@@ -183,6 +184,7 @@ shared/
   api.js              requestJson() + createStore(): estado do servidor, atualizado de 2,5 em 2,5 s
   tokens.css          cores e sombras comuns às duas apps
   boot.css            ecrã de carregamento inicial (spinner) das duas apps
+  nozoom.js           bloqueia o zoom por gesto nas duas apps (telemóvel/PWA)
 scripts/
   build-config.js     build da Vercel: copia o frontend para dist/ e gera os config.js
 vercel.json           build e pasta publicada na Vercel
