@@ -2,4 +2,6 @@ node_modules/
 .env
 # Chave do terminal (copiar de terminal/config.example.js)
 terminal/config.js
+# Ficheiro duplicado do .env criado por engano (não usado)
+server/env
 .DS_Store

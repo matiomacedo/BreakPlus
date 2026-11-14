@@ -185,7 +185,12 @@ function renderMenu({ animate = false } = {}) {
   const filters = activeFilters();
   $('#menu-count').textContent = plural(items.length, 'produto', 'produtos');
   $('#menu-filters').textContent = filters.join(' · ');
-  $('#filters-badge').textContent = filters.length || '';
+  const badge = $('#filters-badge');
+  const badgeText = String(filters.length || '');
+  if (badge.textContent !== badgeText) {
+    badge.textContent = badgeText;
+    if (filters.length) replay(badge, 'bump');       // pequeno salto ao mudar de filtros
+  }
   $('#menu-list').innerHTML = items.length
     ? items.map((item, i) => productCardHTML(item, i, animate)).join('')
     : '<p class="desc">Sem produtos com estes filtros. Limpa os filtros para ver tudo.</p>';
@@ -344,8 +349,19 @@ function renderMore() {
 
     <div class="cl sec">Notificações</div>
     <div class="card">
-      ${switchRowHTML('notifications', 'Aviso de pedido pronto', 'Recebe um aviso quando puderes levantar')}
+      ${switchRowHTML('notifications', 'Aviso de pedido pronto', Notifications.statusHint())}
+      <button class="mrow" data-action="test-notification">
+        <div><b>Testar notificação</b><small>Envia um aviso de exemplo para este dispositivo</small></div>
+      </button>
     </div>
+
+    <div class="cl sec">Aplicação</div>
+    <div class="card" id="install-card" ${PWA.canInstall() ? '' : 'hidden'}>
+      <button class="mrow" data-action="install-pwa">
+        <div><b>Instalar no ecrã principal</b><small>Abre em ecrã completo, como uma app</small></div>
+      </button>
+    </div>
+    <p class="desc desc-flush">No iPhone/iPad: Partilhar → Adicionar ao ecrã principal.</p>
 
     <div class="cl sec">Conta</div>
     <div class="card">
@@ -358,6 +374,7 @@ function renderMore() {
    Navegação entre vistas
    ========================================================================== */
 
+let lastNavView = null;
 function syncNav() {
   const nav = $('#nav');
   nav.style.setProperty('--n', VIEWS.length);
@@ -368,6 +385,12 @@ function syncNav() {
     if (isCurrent) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
   });
+  // O ícone da vista ativa faz um pequeno "pop" ao mudar de separador.
+  if (state.view !== lastNavView) {
+    const icon = nav.querySelector(`button[data-view="${state.view}"] span`);
+    if (icon) replay(icon, 'bump');
+    lastNavView = state.view;
+  }
 }
 
 /** Anima a entrada de uma vista (título + blocos sobem em cascata). */
@@ -414,6 +437,9 @@ function openSheet(html, { swap = false } = {}) {
   const wasOpen = sheet.classList.contains('show');
   $('#pane').innerHTML = html;
   if (!wasOpen) $('#pane').scrollTop = 0;
+  // Índices para a entrada em cascata (ver .sheet.show .pane > * em styles.css).
+  [...$('#pane').children].forEach((el, i) => el.style.setProperty('--i', Math.min(i, 10)));
+  $('#pane').querySelectorAll('.chip').forEach((el, i) => el.style.setProperty('--ci', Math.min(i, 12)));
   if (wasOpen && swap) replay($('#pane'), 'swap');
   sheet.classList.add('show');
   sheet.setAttribute('aria-hidden', 'false');
@@ -469,17 +495,13 @@ function cartLinesHTML() {
   }).join('');
 }
 
-function dayChipsHTML(days) {
-  return days.map((d) => chipHTML('set-day', d.key, false).replace(`>${d.key}<`, `>${d.label}<`)).join('');
-}
-
 function renderSlots() {
   const grid = $('#slot-grid');
   if (!grid) return;
   const day = state.checkout.day;
   const slots = day ? slotsFor(dateFromKey(day)) : [];
   grid.innerHTML = slots.length
-    ? slots.map((s) => `<button class="chip slot" data-action="set-time" data-value="${s.time}" aria-pressed="false" ${s.full ? 'disabled title="Esgotado"' : ''}>${s.time}</button>`).join('')
+    ? slots.map((s, i) => `<button class="chip slot" style="--ci:${Math.min(i, 12)}" data-action="set-time" data-value="${s.time}" aria-pressed="false" ${s.full ? 'disabled title="Esgotado"' : ''}>${s.time}</button>`).join('')
     : '<p class="desc">Sem horários disponíveis.</p>';
   replay(grid, 'swap');
 }
@@ -488,7 +510,7 @@ function renderSlots() {
 function syncCheckout() {
   const seg = $('#mode-seg');
   if (!seg) return;
-  const { mode, day, time } = state.checkout;
+  const { mode, time } = state.checkout;
   const reserve = mode === 'reserve';
 
   seg.dataset.mode = mode;
@@ -504,7 +526,6 @@ function syncCheckout() {
       ? 'O bar pausou os pedidos na hora. Podes reservar para mais tarde.'
       : `Pronto em ${BAR.prep} · Retirada no balcão.`;
 
-  document.querySelectorAll('#day-chips .chip').forEach((c) => setChip(c, c.dataset.value === day));
   document.querySelectorAll('#slot-grid .chip').forEach((c) => setChip(c, c.dataset.value === time));
   syncPayButton();
 }
@@ -548,11 +569,10 @@ function openCartSheet() {
     <div class="reserve" id="reserve-box">
       <div class="reserve-inner">
         ${days.length
-          ? `<div class="cl cl-first">Dia</div>
-             <div class="chips" id="day-chips">${dayChipsHTML(days)}</div>
-             <div class="cl">Hora de levantamento</div>
-             <div class="slots" id="slot-grid"></div>`
-          : '<p class="desc">Não há horários disponíveis para reserva.</p>'}
+          ? `<div class="cl cl-first">Hora de levantamento · hoje</div>
+             <div class="slots" id="slot-grid"></div>
+             <p class="mode-note">As reservas são só para hoje. A última hora de levantamento é ${RESERVATION.todayUntil}.</p>`
+          : '<p class="desc">Já não há horas de reserva hoje. Podes pedir agora ou voltar amanhã.</p>'}
       </div>
     </div>
 

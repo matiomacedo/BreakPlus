@@ -11,6 +11,15 @@ const { loadSharedData } = require('./shared-data');
 const { RESERVATION } = loadSharedData();     // mesmas regras que a app (shared/data.js)
 const orderOut = (o, uid) => ({ ...o.toObject(), mine: String(o.user) === String(uid) });
 
+const pad = (n) => String(n).padStart(2, '0');
+const localDateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+
+/** As reservas são só para o dia atual e, no máximo, até RESERVATION.todayUntil (18:00). */
+function invalidPickup(pickupKey, pickupTime) {
+  return pickupKey !== localDateKey() || toMinutes(pickupTime) > toMinutes(RESERVATION.todayUntil);
+}
+
 /** { "1": 2 } → { 1: 2 } com ids e quantidades inteiros positivos (senão recusa). */
 function parseItems(items) {
   const out = {};
@@ -82,6 +91,8 @@ function studentRouter() {
     const reservation = type === 'reservation';
     // Dia e hora vão parar ao ecrã do terminal: só se aceita o formato exato ("2026-11-05", "12:30")
     if (reservation && !(/^\d{4}-\d{2}-\d{2}$/.test(pickupKey) && /^([01]\d|2[0-3]):[0-5]\d$/.test(pickupTime) && +pickupAt > Date.now())) throw fail('pickup');
+    // Só se reserva para hoje e até às 18:00 (mesma regra que a app mostra em shared/data.js)
+    if (reservation && invalidPickup(pickupKey, pickupTime)) throw fail('pickup');
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');
