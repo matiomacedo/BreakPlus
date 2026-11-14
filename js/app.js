@@ -1,3 +1,4 @@
+
 /* ==========================================================================
    app.js — o que acontece quando o utilizador toca em algo, e como a app
    reage ao que o terminal do bar faz (via js/store.js).
