@@ -46,3 +46,11 @@ const pickupText = (o) => `${dayLabel(dateFromKey(o.pickupKey))} · ${o.pickupTi
 
 /** Pedido que já está na fila do bar (ainda não entregue nem cancelado). */
 const isLive = (o) => o.status === 'received' || o.status === 'preparing' || o.status === 'ready';
+/** Escapes untrusted values before they are interpolated into HTML templates. */
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+})[char]);

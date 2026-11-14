@@ -53,7 +53,7 @@ function riseIn(elements) {
 
 /* ---------- Pequenos blocos reutilizáveis ---------- */
 
-const badgeHTML = (badge) => `<span class="b ${badge.style || ''}">${badge.text}</span>`;
+const badgeHTML = (badge) => `<span class="b ${escapeHtml(badge.style || '')}">${escapeHtml(badge.text)}</span>`;
 const badgesHTML = (badges) => `<div class="bd">${badges.map(badgeHTML).join('')}</div>`;
 const chipHTML = (action, value, isOn) =>
   `<button class="chip ${isOn ? 'on' : ''}" data-action="${action}" data-value="${value}" aria-pressed="${isOn}">${value}</button>`;
@@ -141,7 +141,7 @@ function renderTray() {
 function productImageHTML(item, stock) {
   const src = imageUrl(item);
   const img = src
-    ? `<img src="${src}" alt="${item.name}" loading="lazy" decoding="async"
+    ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async"
             onload="this.classList.add('loaded')" onerror="this.remove()">`
     : '';
   const low = stock > 0 && stock <= 5;
@@ -150,8 +150,8 @@ function productImageHTML(item, stock) {
     <div class="pic">
       <span class="pic-fallback" aria-hidden="true"><svg class="ic"><use href="#i-utensils"/></svg></span>
       ${img}
-      <span class="tag ${item.tagStyle || ''}">${item.tag}</span>
-      ${meta && stock > 0 ? `<span class="meta">${meta}</span>` : ''}
+      <span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>
+      ${meta && stock > 0 ? `<span class="meta">${escapeHtml(meta)}</span>` : ''}
       ${stock === 0 ? '<span class="soldout-badge">Esgotado</span>' : ''}
     </div>`;
 }
@@ -164,16 +164,16 @@ function productCardHTML(item, index, animate) {
       <div class="info">
         <div class="row">
           <div>
-            <div class="cl">${item.subtitle}</div>
-            <h3>${item.name}</h3>
+            <div class="cl">${escapeHtml(item.subtitle)}</div>
+            <h3>${escapeHtml(item.name)}</h3>
           </div>
-          <div class="pr">${eur(item.price)}<small>${item.priceLabel}</small></div>
+          <div class="pr">${eur(item.price)}<small>${escapeHtml(item.priceLabel)}</small></div>
         </div>
-        <p class="desc">${item.description}</p>
+        <p class="desc">${escapeHtml(item.description)}</p>
         ${badgesHTML(item.badges)}
         <div class="acts">
-          <button class="ghost" data-action="show-item" data-id="${item.id}">Detalhes</button>
-          <button class="cta" data-action="add-to-cart" data-id="${item.id}" ${stock === 0 ? 'disabled' : ''}>${stock === 0 ? 'Esgotado' : `Adicionar · ${eur(item.price)}`}</button>
+          <button class="ghost" data-action="show-item" data-id="${escapeHtml(item.id)}">Detalhes</button>
+          <button class="cta" data-action="add-to-cart" data-id="${escapeHtml(item.id)}" ${stock === 0 ? 'disabled' : ''}>${stock === 0 ? 'Esgotado' : `Adicionar · ${eur(item.price)}`}</button>
         </div>
       </div>
     </article>`;
@@ -213,12 +213,12 @@ function orderRowHTML(o) {
   const when = o.type === 'reservation' ? `Reserva · ${pickupText(o)}` : o.when;
   return `
     <div class="rw ${cancelled ? 'is-cancelled' : ''}">
-      <div><b>#${o.number} · ${when}</b><small>${itemsSummary(o.items)}</small></div>
+      <div><b>#${escapeHtml(o.number)} · ${escapeHtml(when)}</b><small>${escapeHtml(itemsSummary(o.items))}</small></div>
       <div class="rw-end">
         <b>${eur(o.total)}</b>
         ${cancelled
           ? '<span class="b">Cancelada</span>'
-          : `<button class="ghost" data-action="repeat-order" data-id="${o.number}">Repetir</button>`}
+          : `<button class="ghost" data-action="repeat-order" data-id="${escapeHtml(o.number)}">Repetir</button>`}
       </div>
     </div>`;
 }
@@ -226,18 +226,18 @@ function orderRowHTML(o) {
 function reservationCardHTML(o) {
   let action;
   if (o.status !== 'reserved') action = `<span class="resv-locked">${o.status === 'ready' ? 'Pronta: já podes levantar' : 'Já em preparação'}</span>`;
-  else if (canCancel(o)) action = `<button class="ghost" data-action="cancel-reservation" data-id="${o.number}">Cancelar</button>`;
+  else if (canCancel(o)) action = `<button class="ghost" data-action="cancel-reservation" data-id="${escapeHtml(o.number)}">Cancelar</button>`;
   else action = `<span class="resv-locked">Já não dá para cancelar</span>`;
   return `
     <div class="card resv-card">
       <div class="row">
-        <div><div class="cl">Reserva #${o.number}</div><h3>${pickupText(o)}</h3></div>
+        <div><div class="cl">Reserva #${escapeHtml(o.number)}</div><h3>${escapeHtml(pickupText(o))}</h3></div>
         <span class="b v ${isLive(o) ? 'live' : ''}">${STATUS_TEXT[o.status]}</span>
       </div>
-      <p class="desc">${itemsSummary(o.items)}</p>
+      <p class="desc">${escapeHtml(itemsSummary(o.items))}</p>
       <div class="acts">
         ${action}
-        <button class="cta" data-action="show-ticket" data-id="${o.number}">Ver senha</button>
+        <button class="cta" data-action="show-ticket" data-id="${escapeHtml(o.number)}">Ver senha</button>
       </div>
     </div>`;
 }
@@ -249,12 +249,12 @@ function liveOrderCardHTML(o) {
   return `
     <div class="card">
       <div class="row">
-        <div><div class="cl">Em curso</div><h3>Pedido #${o.number}</h3></div>
+        <div><div class="cl">Em curso</div><h3>Pedido #${escapeHtml(o.number)}</h3></div>
         <span class="b v live">${STATUS_TEXT[o.status]}</span>
       </div>
       <ol class="steps">${steps}</ol>
       <p class="desc">${o.status === 'ready' ? 'Levanta no balcão e mostra a senha.' : 'Retirada no balcão · avisamos-te quando estiver pronto.'}</p>
-      <button class="cta cta-full" data-action="show-ticket" data-id="${o.number}">Ver senha</button>
+      <button class="cta cta-full" data-action="show-ticket" data-id="${escapeHtml(o.number)}">Ver senha</button>
     </div>`;
 }
 
@@ -288,7 +288,7 @@ function renderWallet({ fresh = false } = {}) {
 
   const movements = db().wallet.transactions.map((t, i) => `
     <div class="rw ${fresh && i === 0 ? 'row-new' : ''}">
-      <div><b>${t.label}</b><small>${t.when}</small></div>
+      <div><b>${escapeHtml(t.label)}</b><small>${escapeHtml(t.when)}</small></div>
       <b class="${t.value > 0 ? 'pos' : ''}">${t.value > 0 ? '+' : '−'}${eur(Math.abs(t.value))}</b>
     </div>`).join('');
 
@@ -331,8 +331,8 @@ function switchRowHTML(key, label, hint) {
 function renderMore() {
   $('#view-more .body').innerHTML = `
     <div class="card prof">
-      <span class="av" aria-hidden="true">${ME.customer[0]}</span>
-      <div><b>${ME.customer}</b><small>${ME.role} · IPVC ESTG</small></div>
+      <span class="av" aria-hidden="true">${escapeHtml(ME.customer[0])}</span>
+      <div><b>${escapeHtml(ME.customer)}</b><small>${escapeHtml(ME.role)} · IPVC ESTG</small></div>
     </div>
 
     <div class="cl sec">Preferências alimentares</div>
@@ -459,10 +459,10 @@ function cartLinesHTML() {
     const item = findItem(id);
     return `
       <div class="ln">
-        <span class="ln-name">${item.name}<small>${eur(item.price)} cada</small></span>
+        <span class="ln-name">${escapeHtml(item.name)}<small>${eur(item.price)} cada</small></span>
         <span class="q">
-          <button data-action="change-qty" data-id="${id}" data-delta="-1" aria-label="Menos">−</button><b>${qty}</b>
-          <button data-action="change-qty" data-id="${id}" data-delta="1" aria-label="Mais">+</button>
+          <button data-action="change-qty" data-id="${escapeHtml(id)}" data-delta="-1" aria-label="Menos">−</button><b>${qty}</b>
+          <button data-action="change-qty" data-id="${escapeHtml(id)}" data-delta="1" aria-label="Mais">+</button>
         </span>
         <b class="ln-total">${eur(qty * item.price)}</b>
       </div>`;
@@ -470,7 +470,7 @@ function cartLinesHTML() {
 }
 
 function dayChipsHTML(days) {
-  return days.map((d) => chipHTML('set-day', d.key, false).replace(`>${d.key}<`, `>${d.label}<`)).join('');
+  return days.map((d) => chipHTML('set-day', escapeHtml(d.key), false).replace(`>${escapeHtml(d.key)}<`, `>${escapeHtml(d.label)}<`)).join('');
 }
 
 function renderSlots() {
@@ -479,7 +479,7 @@ function renderSlots() {
   const day = state.checkout.day;
   const slots = day ? slotsFor(dateFromKey(day)) : [];
   grid.innerHTML = slots.length
-    ? slots.map((s) => `<button class="chip slot" data-action="set-time" data-value="${s.time}" aria-pressed="false" ${s.full ? 'disabled title="Esgotado"' : ''}>${s.time}</button>`).join('')
+    ? slots.map((s) => `<button class="chip slot" data-action="set-time" data-value="${escapeHtml(s.time)}" aria-pressed="false" ${s.full ? 'disabled title="Esgotado"' : ''}>${escapeHtml(s.time)}</button>`).join('')
     : '<p class="desc">Sem horários disponíveis.</p>';
   replay(grid, 'swap');
 }
@@ -574,8 +574,8 @@ function refreshCartSheet() {
 
 function openItemSheet(item) {
   openSheet(`
-    <h2>${item.name}</h2>
-    <p class="desc">${item.description}</p>
+    <h2>${escapeHtml(item.name)}</h2>
+    <p class="desc">${escapeHtml(item.description)}</p>
     ${badgesHTML(item.badges)}
     ${closeButtonHTML()}`);
 }
@@ -588,8 +588,8 @@ function openTicketSheet(number) {
     ? `Levantamento ${pickupText(order)}`
     : STATUS_TEXT[order.status] + (order.status === 'ready' ? ' · levanta no balcão' : '');
   openSheet(`
-    <h2>${reservation ? `Reserva #${order.number}` : `Senha #${order.number}`}</h2>
-    <p class="desc">${status}</p>
+    <h2>${reservation ? `Reserva #${escapeHtml(order.number)}` : `Senha #${escapeHtml(order.number)}`}</h2>
+    <p class="desc">${escapeHtml(status)}</p>
     <div class="qr"></div>
     ${closeButtonHTML('Fechar', 'cta')}`);
 }
@@ -600,9 +600,9 @@ function openConfirmationSheet(order) {
     <div class="done" aria-hidden="true">
       <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M16 27l7 7 13-14"/></svg>
     </div>
-    <h2 class="center">${reservation ? 'Reserva' : 'Pedido'} #${order.number} confirmad${reservation ? 'a' : 'o'}</h2>
+    <h2 class="center">${reservation ? 'Reserva' : 'Pedido'} #${escapeHtml(order.number)} confirmad${reservation ? 'a' : 'o'}</h2>
     <p class="desc center">${reservation
-      ? `Levanta no balcão ${pickupText(order)}. Mostra este código.`
+      ? `Levanta no balcão ${escapeHtml(pickupText(order))}. Mostra este código.`
       : 'Mostra este código no balcão.'}</p>
     <div class="qr"></div>
     ${closeButtonHTML('Concluir', 'cta')}`, { swap: true });
@@ -610,12 +610,12 @@ function openConfirmationSheet(order) {
 
 function openCancelSheet(order) {
   openSheet(`
-    <h2>Cancelar reserva #${order.number}?</h2>
-    <p class="desc">${pickupText(order)} · ${itemsSummary(order.items)}</p>
+    <h2>Cancelar reserva #${escapeHtml(order.number)}?</h2>
+    <p class="desc">${escapeHtml(pickupText(order))} · ${escapeHtml(itemsSummary(order.items))}</p>
     <p class="desc">Vais receber ${eur(order.total)} de volta no teu saldo.</p>
     <div class="acts">
       <button class="ghost" data-action="close-sheet">Manter</button>
-      <button class="cta danger" data-action="confirm-cancel" data-id="${order.number}">Cancelar reserva</button>
+      <button class="cta danger" data-action="confirm-cancel" data-id="${escapeHtml(order.number)}">Cancelar reserva</button>
     </div>`);
 }
 
