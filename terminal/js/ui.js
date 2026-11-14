@@ -66,11 +66,11 @@ const emptyHTML = (title, text) => `
     <span>${text}</span>
   </div>`;
 
-const roleBadge = (o) => (o.role && o.role !== 'Estudante' ? `<span class="role">${o.role}</span>` : '');
+const roleBadge = (o) => (o.role && o.role !== 'Estudante' ? `<span class="role">${escapeHtml(o.role)}</span>` : '');
 
 const linesHTML = (items) => Object.entries(items).map(([id, qty]) => {
   const item = findItem(id);
-  return `<li><span>${qty}× ${item.name}</span><b>${eur(qty * item.price)}</b></li>`;
+  return `<li><span>${qty}× ${escapeHtml(item.name)}</span><b>${eur(qty * item.price)}</b></li>`;
 }).join('');
 
 /* ==========================================================================
@@ -120,14 +120,14 @@ function renderTopbar() {
 
 /** Botão principal do cartão, conforme o estado em que o pedido está. */
 function mainButtonHTML(o) {
-  if (o.status === 'received') return `<button class="btn primary big" data-act="advance" data-number="${o.number}">${icon('flame')}Iniciar preparação</button>`;
-  if (o.status === 'preparing') return `<button class="btn ready big" data-act="advance" data-number="${o.number}">${icon('megaphone')}Marcar pronto (chamar #${o.number})</button>`;
-  return `<button class="btn deliver big" data-act="advance" data-number="${o.number}">${icon('check-circle')}Entregar pedido</button>`;
+  if (o.status === 'received') return `<button class="btn primary big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('flame')}Iniciar preparação</button>`;
+  if (o.status === 'preparing') return `<button class="btn ready big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('megaphone')}Marcar pronto (chamar #${escapeHtml(o.number)})</button>`;
+  return `<button class="btn deliver big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('check-circle')}Entregar pedido</button>`;
 }
 
 function sideButtonHTML(o) {
-  if (o.status === 'ready') return `<button class="btn soft icon big" data-act="notify" data-number="${o.number}" title="Tocar a campainha / chamar outra vez" aria-label="Chamar outra vez">${icon('bell')}</button>`;
-  return `<button class="btn soft icon big danger-hover" data-act="cancel" data-number="${o.number}" title="Cancelar e reembolsar" aria-label="Cancelar e reembolsar">${icon('x')}</button>`;
+  if (o.status === 'ready') return `<button class="btn soft icon big" data-act="notify" data-number="${escapeHtml(o.number)}" title="Tocar a campainha / chamar outra vez" aria-label="Chamar outra vez">${icon('bell')}</button>`;
+  return `<button class="btn soft icon big danger-hover" data-act="cancel" data-number="${escapeHtml(o.number)}" title="Cancelar e reembolsar" aria-label="Cancelar e reembolsar">${icon('x')}</button>`;
 }
 
 const SPEED_HINT = {
@@ -142,25 +142,25 @@ function orderCardHTML(o) {
   const changedStatus = ui.lastStatus[o.number] && ui.lastStatus[o.number] !== o.status;
   const reservation = o.type === 'reservation';
   const origin = reservation
-    ? `${icon('calendar', 'sm')}Reserva · levantamento às ${o.pickupTime}`
+    ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
     : 'Enviado da App Campus · Saldo pago';
   const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '● ' : ''}${STEP_LABEL[s]}</span>`).join('');
 
   return `
-  <article class="order s-${o.status} ${isNew ? 'rise' : ''} ${changedStatus ? 'flash' : ''}" data-number="${o.number}">
+  <article class="order s-${escapeHtml(o.status)} ${isNew ? 'rise' : ''} ${changedStatus ? 'flash' : ''}" data-number="${escapeHtml(o.number)}">
     <header class="order-head">
       <div class="who">
-        <span class="num">#${o.number}</span>
+        <span class="num">#${escapeHtml(o.number)}</span>
         <div>
-          <div class="name">${o.customer}${roleBadge(o)}</div>
+          <div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div>
           <div class="origin">${origin}</div>
         </div>
       </div>
       <div class="pills">
         ${o.status === 'ready'
-          ? `<span class="pill ok" data-since="${o.readyAt}" data-late="0">${icon('check', 'sm')}<span>${sinceText(o.readyAt)}</span></span>`
-          : `<span class="pill" data-since="${o.queuedAt}" data-late="1">${icon('clock', 'sm')}<span>${sinceText(o.queuedAt)}</span></span>`}
-        <span class="pill state s-${o.status}">${step + 1}. ${STEP_LABEL[o.status]}</span>
+          ? `<span class="pill ok" data-since="${escapeHtml(o.readyAt)}" data-late="0">${icon('check', 'sm')}<span>${sinceText(o.readyAt)}</span></span>`
+          : `<span class="pill" data-since="${escapeHtml(o.queuedAt)}" data-late="1">${icon('clock', 'sm')}<span>${sinceText(o.queuedAt)}</span></span>`}
+        <span class="pill state s-${escapeHtml(o.status)}">${step + 1}. ${STEP_LABEL[o.status]}</span>
       </div>
     </header>
 
@@ -172,7 +172,7 @@ function orderCardHTML(o) {
         <div class="speed-bar">
           <div class="speed-track"><div class="speed-fill"></div></div>
           <input class="speed-input" type="range" min="0" max="2" step="1" value="${step}"
-                 data-number="${o.number}" aria-label="Estado do pedido #${o.number}">
+                 data-number="${escapeHtml(o.number)}" aria-label="Estado do pedido #${escapeHtml(o.number)}">
         </div>
         <small>${SPEED_HINT[o.status]}</small>
       </div>
@@ -188,14 +188,14 @@ function historyItemHTML(o) {
   return `
     <div class="hist ${cancelled ? 'is-cancelled' : ''}">
       <div class="hist-top">
-        <span class="hnum">#${o.number}</span>
-        <div class="hist-who"><b>${o.customer}</b><small>${cancelled ? 'Anulado' : 'Entregue'} ${when}</small></div>
+        <span class="hnum">#${escapeHtml(o.number)}</span>
+        <div class="hist-who"><b>${escapeHtml(o.customer)}</b><small>${cancelled ? 'Anulado' : 'Entregue'} ${when}</small></div>
         <b class="price">${eur(o.total)}</b>
       </div>
-      <div class="hist-items">${itemsSummary(o.items)}</div>
+      <div class="hist-items">${escapeHtml(itemsSummary(o.items))}</div>
       ${cancelled
         ? `<span class="pill">${o.mine ? 'Reembolsado na app' : 'Anulado'}</span>`
-        : `<button class="btn soft-danger" data-act="undo" data-number="${o.number}">${icon('undo')}Anular pedido (reembolso + stock)</button>`}
+        : `<button class="btn soft-danger" data-act="undo" data-number="${escapeHtml(o.number)}">${icon('undo')}Anular pedido (reembolso + stock)</button>`}
     </div>`;
 }
 
@@ -229,19 +229,19 @@ function reservationCardHTML(o) {
   const queued = o.status !== 'reserved';
   const isNew = !ui.first && !ui.known.has(o.number);
   const status = queued
-    ? `<span class="pill state s-${o.status}">Na fila · ${STEP_LABEL[o.status]}</span>`
+    ? `<span class="pill state s-${escapeHtml(o.status)}">Na fila · ${STEP_LABEL[o.status]}</span>`
     : `<span class="pill ${soon ? 'late' : ''}">${soon ? 'Preparar já' : 'Reservado'}</span>`;
 
   return `
-  <article class="resv ${soon ? 'soon' : ''} ${queued ? 'queued' : ''} ${isNew ? 'rise' : ''}" data-number="${o.number}">
+  <article class="resv ${soon ? 'soon' : ''} ${queued ? 'queued' : ''} ${isNew ? 'rise' : ''}" data-number="${escapeHtml(o.number)}">
     <div class="when">
-      <b>${o.pickupTime}</b>
+      <b>${escapeHtml(o.pickupTime)}</b>
       <span class="pill" data-until="${when.getTime()}">${untilText(when)}</span>
     </div>
     <div class="resv-body">
       <div class="resv-top">
-        <span class="hnum">#${o.number}</span>
-        <div><div class="name">${o.customer}${roleBadge(o)}</div><div class="origin">Reservado na App Campus · Saldo pago</div></div>
+        <span class="hnum">#${escapeHtml(o.number)}</span>
+        <div><div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div><div class="origin">Reservado na App Campus · Saldo pago</div></div>
         ${status}
       </div>
       <ul class="lines compact">${linesHTML(o.items)}</ul>
@@ -249,8 +249,8 @@ function reservationCardHTML(o) {
     <div class="buttons col">
       ${queued
         ? `<button class="btn soft big" data-act="goto-orders">${icon('receipt')}Ver na fila</button>`
-        : `<button class="btn primary big" data-act="start-reservation" data-number="${o.number}">${icon('flame')}Preparar agora</button>
-           <button class="btn soft big danger-hover" data-act="cancel" data-number="${o.number}">${icon('x')}Cancelar e reembolsar</button>`}
+        : `<button class="btn primary big" data-act="start-reservation" data-number="${escapeHtml(o.number)}">${icon('flame')}Preparar agora</button>
+           <button class="btn soft big danger-hover" data-act="cancel" data-number="${escapeHtml(o.number)}">${icon('x')}Cancelar e reembolsar</button>`}
     </div>
   </article>`;
 }
@@ -283,21 +283,21 @@ function stockState(qty) {
 function stockCardHTML(item) {
   const src = imageUrl(item);
   return `
-  <article class="stock" id="stock-${item.id}" data-id="${item.id}">
+  <article class="stock" id="stock-${escapeHtml(item.id)}" data-id="${escapeHtml(item.id)}">
     <div class="stock-head">
       <div class="thumb">
         <span class="thumb-fallback">${icon('utensils')}</span>
-        ${src ? `<img src="${src}" alt="" loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">` : ''}
+        ${src ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" onload="this.classList.add('loaded')" onerror="this.remove()">` : ''}
       </div>
-      <div class="stock-name"><b>${item.name}</b><small>${item.subtitle}</small></div>
+      <div class="stock-name"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.subtitle)}</small></div>
       <span class="pill state" data-role="badge"></span>
     </div>
     <div class="stepper">
-      <button class="step" data-act="stock-adjust" data-id="${item.id}" data-delta="-1" aria-label="Menos uma unidade">${icon('minus')}</button>
+      <button class="step" data-act="stock-adjust" data-id="${escapeHtml(item.id)}" data-delta="-1" aria-label="Menos uma unidade">${icon('minus')}</button>
       <div class="qty"><b data-role="qty"></b><small>unidades</small></div>
-      <button class="step plus" data-act="stock-adjust" data-id="${item.id}" data-delta="1" aria-label="Mais uma unidade">${icon('plus')}</button>
+      <button class="step plus" data-act="stock-adjust" data-id="${escapeHtml(item.id)}" data-delta="1" aria-label="Mais uma unidade">${icon('plus')}</button>
     </div>
-    <button class="btn soft wide" data-act="stock-toggle" data-id="${item.id}" data-role="toggle"></button>
+    <button class="btn soft wide" data-act="stock-toggle" data-id="${escapeHtml(item.id)}" data-role="toggle"></button>
   </article>`;
 }
 
