@@ -1,0 +1,62 @@
+/* Tokens de design partilhados pela app dos alunos e pelo terminal. */
+
+:root {
+  --bg: #F4F5F7;
+  --card: #fff;
+  --ink: #0F172A;
+  --mut: #64748B;
+  --bd: rgba(15, 23, 42, .08);          /* linha fina */
+  --bd-strong: rgba(15, 23, 42, .16);
+
+  --brand: hsl(188, 80%, 18%);          /* verde-azulado escuro (cor principal) */
+  --onb: #fff;                          /* texto sobre a cor principal */
+  --gold: #F0A800;                      /* dourado do logótipo (detalhes) */
+  --green: #10B981;
+  --danger: #DC2626;
+  --danger-bg: #FEE2E2;  --danger-t: #B91C1C;
+
+  --chip: #F1F5F9;
+  --chipt: #334155;
+  --track: #E9ECF0;
+  --thumb: #fff;                        /* pílula do seletor Pedir agora / Reservar */
+  --glass: rgba(255, 255, 255, .82);
+  --img: #E7EAEE;
+
+  --mint: #ECFDF5;  --mintt: #059669;   /* badge verde */
+  --warn: #FFFBEB;  --warnt: #B45309;   /* badge amarelo */
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .04), 0 2px 8px -2px rgba(15, 23, 42, .06);
+  --shadow-md: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px -12px rgba(15, 23, 42, .16);
+  --shadow-lg: 0 24px 56px -16px rgba(15, 23, 42, .28);
+
+  --ease: cubic-bezier(.22, 1, .36, 1);       /* saída suave */
+  --spring: cubic-bezier(.32, .72, 0, 1);     /* painéis e indicadores */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A101C;
+    --card: #131C2E;
+    --ink: #F1F5F9;
+    --mut: #94A3B8;
+    --bd: rgba(255, 255, 255, .08);
+    --bd-strong: rgba(255, 255, 255, .18);
+    --brand: hsl(188, 75%, 50%);
+    --onb: #04222a;
+    --chip: #1d2940;
+    --chipt: #CBD5E1;
+    --track: #1A2438;
+    --thumb: #2A3A58;
+    --glass: rgba(19, 28, 46, .84);
+    --img: #1B2740;
+    --mint: #0f2e26;  --mintt: #34D399;
+    --warn: #33270f;  --warnt: #FBBF24;
+    --danger: #F87171;
+    --danger-bg: #3a1618;  --danger-t: #FCA5A5;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px -12px rgba(0, 0, 0, .6);
+    --shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, .7);
+  }
+}
+
+

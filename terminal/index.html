@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<!-- data-base: as fotos e o logo estão na pasta acima (../images/) -->
+<html lang="pt" data-base="../">
+<head>
+  <meta charset="utf-8">
+  <!-- Aberto como ".../terminal" (sem "/" no fim), os caminhos relativos (css/, js/, ../shared/) apontam para
+       a raiz: o terminal.css dá 404 e carrega o JS da app dos alunos. Alguns servidores (ex.: `npx serve`)
+       não redirecionam sozinhos, por isso acrescenta-se a "/" antes de carregar qualquer CSS ou JS. -->
+  <script>if (!/(\/|\.html?)$/.test(location.pathname)) location.replace(location.pathname + '/' + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F4F5F7">
+  <title>Break+ Terminal · Bar Central ESTG</title>
+  <link rel="icon" href="../images/logo-break-estg.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/tokens.css">
+  <link rel="stylesheet" href="css/terminal.css">
+</head>
+<body>
+
+  <!-- Ícones (sprite SVG). Para adicionar um ícone: novo <symbol> + <use href="#i-nome"> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l3-2 2 2 3-2 3 2 2-2 3 2V2l-3 2-2-2-3 2-3-2-2 2Z"/><path d="M8 8h8M8 12h8"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18"/><path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></symbol>
+      <symbol id="i-package" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 15V9M14 15V9"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4Z"/></symbol>
+      <symbol id="i-maximize" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5Z"/></symbol>
+      <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+      <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/></symbol>
+      <symbol id="i-utensils" viewBox="0 0 24 24"><path d="M3 2v7a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3Zm0 0v7"/></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- ===== Barra de topo ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <picture>
+        <source srcset="../images/logo-break-estg-dark.png" media="(prefers-color-scheme: dark)">
+        <img class="logo" src="../images/logo-break-estg.png" alt="Break+ ESTG" width="119" height="41">
+      </picture>
+      <div class="brand-text">
+        <span class="pos-tag">POS Balcão</span>
+        <small><span class="live-dot"></span>Bar Central ESTG</small>
+      </div>
+    </div>
+
+    <div class="metrics" aria-label="Indicadores do turno">
+      <div class="metric"><span>Fila ativa</span><b id="m-queue">–</b></div>
+      <div class="metric"><span>Tempo médio</span><b id="m-avg">–</b></div>
+      <div class="metric"><span>Hora</span><b id="m-clock">–</b></div>
+    </div>
+
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Secções do terminal">
+      <i class="tab-thumb" aria-hidden="true"></i>
+      <button class="tab on" role="tab" data-act="tab" data-tab="orders" aria-selected="true">
+        <svg class="ic"><use href="#i-receipt"/></svg><span class="tab-label">Pedidos</span><span class="badge" id="b-orders">0</span>
+      </button>
+      <button class="tab" role="tab" data-act="tab" data-tab="reservations" aria-selected="false">
+        <svg class="ic"><use href="#i-calendar"/></svg><span class="tab-label">Reservas</span><span class="badge" id="b-resv">0</span>
+      </button>
+      <button class="tab" role="tab" data-act="tab" data-tab="stock" aria-selected="false">
+        <svg class="ic"><use href="#i-package"/></svg><span class="tab-label">Stock</span><span class="badge" id="b-stock" hidden>0</span>
+      </button>
+    </nav>
+
+    <div class="actions">
+      <div class="terminal-id"><b>Terminal Balcão 1</b><small>Posto partilhado · Operacional</small></div>
+      <button class="btn soft" id="pause-btn" data-act="pause" title="Pausar pedidos na hora">
+        <svg class="ic"><use href="#i-pause"/></svg><span id="pause-label">Pausar</span>
+      </button>
+      <button class="btn soft icon" data-act="fullscreen" title="Ecrã completo" aria-label="Ecrã completo">
+        <svg class="ic"><use href="#i-maximize"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Aviso permanente quando não há ligação ao servidor (ou a chave do terminal está errada) -->
+  <div class="pause-strip conn-strip" id="conn-strip" role="alert" hidden>
+    <svg class="ic"><use href="#i-ban"/></svg>
+    <span id="conn-msg"></span>
+  </div>
+
+  <!-- Aviso permanente quando o bar está em pausa -->
+  <div class="pause-strip" id="pause-strip" hidden>
+    <svg class="ic"><use href="#i-pause"/></svg>
+    <span><b>Pedidos na hora em pausa.</b> Os alunos só conseguem reservar para mais tarde.</span>
+    <button class="btn light" data-act="pause">Retomar pedidos</button>
+  </div>
+
+  <main class="main">
+
+    <!-- ===== Pedidos ===== -->
+    <section class="view orders-layout" id="view-orders">
+      <div class="col-main">
+        <div class="panel head">
+          <svg class="ic xl accent"><use href="#i-zap"/></svg>
+          <div class="head-text">
+            <h1>Fila de produção</h1>
+            <p>Arrasta a barra ou toca no botão grande para avançar o pedido.</p>
+          </div>
+          <div class="legend" aria-label="Legenda">
+            <span><i class="dot s-received"></i>Recebido</span>
+            <span><i class="dot s-preparing"></i>A preparar</span>
+            <span><i class="dot s-ready"></i>Pronto</span>
+          </div>
+        </div>
+        <div class="stack" id="queue"></div>
+      </div>
+      <aside class="col-side" id="history"></aside>
+    </section>
+
+    <!-- ===== Reservas ===== -->
+    <section class="view" id="view-reservations" hidden>
+      <div class="panel head">
+        <svg class="ic xl accent"><use href="#i-calendar"/></svg>
+        <div class="head-text">
+          <h1>Reservas</h1>
+          <p>Pedidos marcados para levantar mais tarde. Toca em <b>Preparar agora</b> quando se aproximar a hora: passa para a fila.</p>
+        </div>
+      </div>
+      <div id="resv-list"></div>
+    </section>
+
+    <!-- ===== Stock ===== -->
+    <section class="view" id="view-stock" hidden>
+      <div class="panel head">
+        <svg class="ic xl accent"><use href="#i-package"/></svg>
+        <div class="head-text">
+          <h1>Stock do balcão</h1>
+          <p>O stock desce sozinho a cada pedido. Corrige aqui quando chegar mais ou acabar. Produtos esgotados deixam de poder ser pedidos na app.</p>
+        </div>
+        <div class="legend" id="stock-summary"></div>
+      </div>
+      <div class="stock-grid" id="stock-grid"></div>
+    </section>
+
+    <footer class="foot">
+      <span>Dados ligados à base de dados do servidor.</span>
+    </footer>
+  </main>
+
+  <!-- Aviso (toast) -->
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span class="toast-icon"><svg class="ic"><use href="#i-check-circle"/></svg></span>
+    <div><b id="toast-title"></b><span id="toast-msg"></span></div>
+  </div>
+
+  <!-- Confirmação (cancelar / anular) -->
+  <div class="modal" id="modal" aria-hidden="true">
+    <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title"></h2>
+      <p id="modal-text"></p>
+      <div class="modal-actions">
+        <button class="btn ghost" data-act="modal-close">Voltar</button>
+        <button class="btn danger" id="modal-ok" data-act="modal-ok"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ordem importa: configuração → dados partilhados → store → UI → eventos.
+       config.js não está no repositório (tem a chave): copia config.example.js. -->
+  <script src="config.js"></script>
+  <script src="../shared/data.js"></script>
+  <script src="../shared/util.js"></script>
+  <script src="../shared/api.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

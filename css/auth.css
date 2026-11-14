@@ -1,0 +1,25 @@
+/* Ecrã de login da app dos alunos (email + password → PIN do cartão). Usa os tokens de shared/tokens.css. */
+.auth { position: fixed; inset: 0; z-index: 9999; background: var(--bg); color: var(--ink); display: grid; place-items: center; padding: 20px; overflow-y: auto; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; line-height: 20px; }
+.auth[hidden] { display: none; }
+.auth *, .auth *::before, .auth *::after { box-sizing: border-box; }
+.auth-card { width: 100%; max-width: 360px; display: grid; gap: 16px; text-align: center; }
+.auth-card .logo { height: 41px; width: auto; margin: 0 auto; display: block; }
+.auth-card h1 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 800; }
+.auth-card p { margin: 0; color: var(--mut); }
+.auth-step { display: grid; gap: 12px; }
+.auth-step[hidden] { display: none; }
+.auth-field { width: 100%; height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--bd-strong); background: var(--card); color: var(--ink); font: inherit; }
+.auth-field:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+.auth-btn { height: 48px; border: 0; border-radius: 14px; background: var(--brand); color: var(--onb); font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.auth-btn:active { transform: scale(.98); }
+.auth-err { min-height: 20px; color: var(--danger); font-weight: 600; }
+.auth-link { background: none; border: 0; color: var(--mut); font: inherit; font-weight: 600; cursor: pointer; padding: 8px; }
+.pin-dots { display: flex; justify-content: center; gap: 14px; margin: 4px 0; }
+.pin-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--bd-strong); transition: background .15s, border-color .15s, transform .15s; }
+.pin-dots i.on { background: var(--brand); border-color: var(--brand); transform: scale(1.1); }
+.pin-dots.shake { animation: pin-shake .35s; }
+@keyframes pin-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 280px; width: 100%; margin: 0 auto; }
+.keypad button { height: 60px; border-radius: 18px; border: 1px solid var(--bd); background: var(--card); color: var(--ink); font-family: inherit; font-size: 22px; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-sm); transition: transform .1s; }
+.keypad button:active { transform: scale(.94); }
+.keypad .spacer { visibility: hidden; }
