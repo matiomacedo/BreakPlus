@@ -27,6 +27,18 @@ test('login em 2 passos: password certa e PIN certo dão um token de sessão', a
   assert.equal(s2.body.user.email, 'aluno@demo.pt');
 });
 
+test('o avatar vem no login e em /api/auth/me (URL completo ou só o nome)', async () => {
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const s2 = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '1234' } });
+  assert.equal(s2.body.user.avatar, '/ProfilePictureUser/goncalo.svg');
+  const me = await call('/api/auth/me', { token: s2.body.token });
+  assert.equal(me.body.user.avatar, '/ProfilePictureUser/goncalo.svg');
+
+  const ana = await login('ana@demo.pt', 'demo1234', '4321');
+  const anaMe = await call('/api/auth/me', { token: ana });
+  assert.equal(anaMe.body.user.avatar, 'ana.svg');       // o cliente acrescenta a pasta
+});
+
 test('PIN errado é recusado e diz quantas tentativas faltam', async () => {
   const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
   const s2 = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '0000' } });

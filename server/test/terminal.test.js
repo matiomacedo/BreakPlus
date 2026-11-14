@@ -45,6 +45,22 @@ test('o estado do terminal tem os pedidos de todos, stock, pausa e fila, sem dad
   assert.deepEqual(r.body.orders.map((o) => o.customer).sort(), ['Ana Costa', 'Gonçalo Silva']);
 });
 
+test('o histórico mostra o nome atual do utilizador, não a cópia guardada no pedido', async () => {
+  const o = await placeNow(await login());
+  const { User } = require('../src/models');
+  await User.updateOne({ email: 'aluno@demo.pt' }, { name: 'Gonçalo Novo', roleLabel: 'Docente' });
+
+  const r = await terminal('/state');
+  const updated = r.body.orders.find((x) => x.number === o.number);
+  assert.equal(updated.customer, 'Gonçalo Novo');
+  assert.equal(updated.role, 'Docente');
+
+  // Se a conta desaparecer, mantém-se a cópia histórica como fallback.
+  await User.deleteOne({ email: 'aluno@demo.pt' });
+  const r2 = await terminal('/state');
+  assert.equal(r2.body.orders.find((x) => x.number === o.number).customer, 'Gonçalo Silva');
+});
+
 /* ---------- Ações ---------- */
 
 test('avançar o estado: sem estado explícito segue para o seguinte', async () => {

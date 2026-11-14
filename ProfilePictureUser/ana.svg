@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Fotografia de perfil de Ana Costa">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B45309"/>
+      <stop offset="1" stop-color="#F0A800"/>
+    </linearGradient>
+    <clipPath id="circle">
+      <circle cx="100" cy="100" r="100"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#circle)">
+    <rect width="200" height="200" fill="url(#bg)"/>
+    <path d="M44 104c0-34 25-60 56-60s56 26 56 60v52c0 12-9 22-20 22H64c-11 0-20-10-20-22z" fill="#4A2C1D"/>
+    <circle cx="100" cy="96" r="50" fill="#F6D2B8"/>
+    <path d="M50 96c0-28 22-50 50-50s50 22 50 50c0 4-1 8-2 12-6-18-17-28-31-31-8 6-22 9-36 7-8 4-14 12-18 21-5-3-9-6-13-9z" fill="#4A2C1D"/>
+    <path d="M36 200c4-37 28-56 64-56s60 19 64 56z" fill="#7C2D12"/>
+    <path d="M78 96c3 3 7 5 11 5M111 96c3 0 7-2 11-5" stroke="#9A6647" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <circle cx="86" cy="98" r="4" fill="#2B1B16"/>
+    <circle cx="114" cy="98" r="4" fill="#2B1B16"/>
+    <path d="M100 102v13c0 3-2 5-5 5" stroke="#DEA17C" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M86 130c8 6 20 6 28 0" stroke="#B45309" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <circle cx="66" cy="114" r="7" fill="#F0A800" opacity=".55"/>
+    <circle cx="134" cy="114" r="7" fill="#F0A800" opacity=".55"/>
+  </g>
+</svg>

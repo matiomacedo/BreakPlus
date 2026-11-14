@@ -14,8 +14,8 @@ const { loadSharedData } = require('./shared-data');
   })));
   // Contas de demonstração (muda as passwords/PINs antes de qualquer deploy)
   await User.create([
-    { name: 'Gonçalo Silva', role: 'student', roleLabel: 'Estudante', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5 },
-    { name: 'Ana Costa', role: 'student', roleLabel: 'Estudante', email: 'ana@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('4321'), balance: 8 },
+    { name: 'Gonçalo Silva', role: 'student', roleLabel: 'Estudante', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5, avatar: '/ProfilePictureUser/goncalo.svg' },
+    { name: 'Ana Costa', role: 'student', roleLabel: 'Estudante', email: 'ana@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('4321'), balance: 8, avatar: '/ProfilePictureUser/ana.svg' },
   ]);
   await Setting.create({ _id: 'bar', paused: false, lastNumber: 100 });
   console.log(`Seed ok: ${ITEMS.length} produtos, 2 utilizadores`);

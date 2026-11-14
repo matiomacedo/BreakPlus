@@ -4,12 +4,15 @@ const crypto = require('crypto');
 const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
-const { barSettings, queueStats, cancelOrder } = require('./orders');
+const { barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 
 const NEXT = { received: 'preparing', preparing: 'ready', ready: 'done' };
 
-/** Pedido para o terminal: sem o id do utilizador (o terminal só precisa do nome). */
-const terminalOrder = (o) => { const { user, ...rest } = o.toObject(); return rest; };
+/** Pedido para o terminal: sem o id do utilizador; nome/função vêm da conta atual (com fallback histórico). */
+const terminalOrder = (o) => {
+  const { user, ...rest } = o.toObject();
+  return { ...rest, ...currentCustomer(o) };
+};
 
 /** Compara em tempo constante (o hash iguala os tamanhos). */
 const sameKey = (a, b) => {
@@ -32,7 +35,7 @@ function terminalRouter({ terminalKey }) {
   r.get('/state', wrap(async (_req, res) => {
     const [products, set, orders, stats] = await Promise.all([
       Product.find(), barSettings(),
-      Order.find().sort({ number: -1 }).limit(200),
+      Order.find().sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       queueStats(),
     ]);
     res.json({
@@ -52,17 +55,22 @@ function terminalRouter({ terminalKey }) {
     if (status === 'preparing' && prev === 'reserved') o.queuedAt = now;      // reserva entra na fila
     if (status === 'ready') { o.readyAt = now; o.notifiedAt = now; } else if (status !== 'done') o.readyAt = undefined;
     if (status === 'done') o.doneAt = now;
-    await o.save(); res.json({ ok: true, order: terminalOrder(o) });
+    await o.save();
+    await o.populate('user', USER_FIELDS);
+    res.json({ ok: true, order: terminalOrder(o) });
   }));
 
   r.post('/orders/:n/notify', wrap(async (req, res) => {
-    const o = await Order.findOneAndUpdate({ number: +req.params.n }, { notifiedAt: Date.now() }, { new: true });
+    const o = await Order.findOneAndUpdate({ number: +req.params.n }, { notifiedAt: Date.now() }, { new: true })
+      .populate('user', USER_FIELDS);
     res.json({ ok: !!o, order: o && terminalOrder(o) });
   }));
 
   // O bar pode anular qualquer pedido (mesmo entregue): reembolsa e repõe stock
   r.post('/orders/:n/cancel', wrap(async (req, res) => {
-    res.json({ ok: true, order: terminalOrder(await cancelOrder(req.params.n, 'staff')) });
+    const o = await cancelOrder(req.params.n, 'staff');
+    await o.populate('user', USER_FIELDS);
+    res.json({ ok: true, order: terminalOrder(o) });
   }));
 
   // { delta: ±n } soma ao stock; { set: n } define-o. Ambos têm de ser inteiros (set ≥ 0).

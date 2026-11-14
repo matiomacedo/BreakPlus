@@ -6,6 +6,15 @@ const { fail } = require('./http');
 const LIVE = ['received', 'preparing', 'ready'];
 const r2 = (n) => Math.round(n * 100) / 100;
 
+/** Campos do utilizador usados para mostrar quem fez o pedido. */
+const USER_FIELDS = 'name roleLabel';
+
+/** Nome/função atuais do utilizador; a cópia no pedido é o fallback se a conta já não existir. */
+function currentCustomer(o) {
+  const u = o.user && typeof o.user === 'object' && o.user.name ? o.user : null;
+  return u ? { customer: u.name, role: u.roleLabel } : { customer: o.customer, role: o.role };
+}
+
 /** Definições do bar (pausa + contador de senhas). Cria-as se ainda não existirem (ex.: sem seed). */
 const barSettings = (update = {}, session = null) =>
   Setting.findOneAndUpdate({ _id: 'bar' }, update, { upsert: true, new: true, setDefaultsOnInsert: true, session });
@@ -35,4 +44,4 @@ const cancelOrder = (number, by, check = () => {}) => inTx(async (session) => {
   return o;
 });
 
-module.exports = { LIVE, r2, barSettings, queueStats, cancelOrder };
+module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, cancelOrder };

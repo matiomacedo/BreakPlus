@@ -58,6 +58,14 @@ const badgesHTML = (badges) => `<div class="bd">${badges.map(badgeHTML).join('')
 const chipHTML = (action, value, isOn) =>
   `<button class="chip ${isOn ? 'on' : ''}" data-action="${action}" data-value="${value}" aria-pressed="${isOn}">${value}</button>`;
 
+/** Fotografia de perfil: aceita um URL/path completo ou só o nome em ProfilePictureUser/. */
+function avatarSrc(avatar) {
+  const src = String(avatar || '').trim();
+  if (!src) return '';
+  if (/^(?:[a-z]+:)?\/\//i.test(src) || src.startsWith('/') || src.startsWith('data:')) return src;
+  return '/ProfilePictureUser/' + src;
+}
+
 function setChip(button, isOn) {
   button.classList.toggle('on', isOn);
   button.setAttribute('aria-pressed', isOn);
@@ -334,9 +342,12 @@ function switchRowHTML(key, label, hint) {
 }
 
 function renderMore() {
+  const avatar = avatarSrc(ME.avatar);
   $('#view-more .body').innerHTML = `
     <div class="card prof">
-      <span class="av" aria-hidden="true">${escapeHtml(ME.customer[0])}</span>
+      <span class="av" aria-hidden="true">${escapeHtml(ME.customer[0] || '?')}${avatar
+        ? `<img src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`
+        : ''}</span>
       <div><b>${escapeHtml(ME.customer)}</b><small>${escapeHtml(ME.role)} · IPVC ESTG</small></div>
     </div>
 
@@ -493,10 +504,6 @@ function cartLinesHTML() {
         <b class="ln-total">${eur(qty * item.price)}</b>
       </div>`;
   }).join('');
-}
-
-function dayChipsHTML(days) {
-  return days.map((d) => chipHTML('set-day', escapeHtml(d.key), false).replace(`>${escapeHtml(d.key)}<`, `>${escapeHtml(d.label)}<`)).join('');
 }
 
 function renderSlots() {

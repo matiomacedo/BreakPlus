@@ -37,6 +37,6 @@ async function registerFail(u) {
   if (u.failCount >= MAX_FAILS) { u.lockUntil = new Date(Date.now() + LOCK_MIN * 60000); u.failCount = 0; }
   await u.save();
 }
-const publicUser = (u) => ({ id: u._id, name: u.name, role: u.role, roleLabel: u.roleLabel, email: u.email });
+const publicUser = (u) => ({ id: u._id, name: u.name, role: u.role, roleLabel: u.roleLabel, email: u.email, avatar: u.avatar || '' });
 
 module.exports = { hash, verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS };
