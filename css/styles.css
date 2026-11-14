@@ -38,8 +38,13 @@ body::before {
   background: radial-gradient(90% 38% at 50% -8%, color-mix(in srgb, var(--brand) 11%, transparent), transparent 70%);
 }
 
-button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+button {
+  font: inherit; color: inherit; border: 0; background: none; cursor: pointer;
+  transition: transform .2s var(--ease), background-color .25s var(--ease),
+              color .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease);
+}
 button:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+button:disabled { cursor: not-allowed; }
 
 [hidden] { display: none !important; }
 .contents { display: contents; }
@@ -70,6 +75,9 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
 @keyframes draw  { to { stroke-dashoffset: 0; } }
 @keyframes ring  { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 8px transparent; } }
 @keyframes shine { from { opacity: .45; } to { opacity: 1; } }
+@keyframes offline { from { opacity: 0; transform: translate(-50%, -10px) scale(.96); } }
+@keyframes sheen { from { transform: translateX(-160%) skewX(-18deg); } to { transform: translateX(320%) skewX(-18deg); } }
+@keyframes chipOn { from { transform: scale(.88); } }
 
 .rise { animation: rise .6s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 55ms); }
 .pop  { animation: pop .55s var(--ease) backwards; }
@@ -129,6 +137,7 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
 
 /* Botões */
 .cta {
+  position: relative; overflow: hidden;
   flex: 1; height: 48px; padding: 0 20px;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   color: var(--onb); font-weight: 700; border-radius: 99px;
@@ -136,8 +145,14 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--brand) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, .2);
   transition: transform .25s var(--ease), box-shadow .25s var(--ease), background .3s var(--ease);
 }
+.cta::after {                                      /* brilho que passa ao pairar */
+  content: ""; position: absolute; top: -60%; bottom: -60%; left: 0; width: 42%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .38), transparent);
+  transform: translateX(-160%) skewX(-18deg);
+  pointer-events: none;
+}
 .cta:active { transform: scale(.96); }
-.cta.added { background: var(--green); color: #fff; }
+.cta.added { background: var(--green); color: #fff; animation: bump .4s var(--ease); }
 .cta.added .ic { width: 18px; height: 18px; stroke-width: 2.6; }
 
 .ghost {
@@ -154,7 +169,8 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
 .acts { display: flex; gap: 10px; margin-top: 16px; }
 
 @media (hover: hover) {
-  .cta:hover { transform: translateY(-1px); }
+  .cta:hover { transform: translateY(-1px); box-shadow: 0 16px 28px -12px color-mix(in srgb, var(--brand) 90%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25); }
+  .cta:hover::after { animation: sheen .85s var(--ease); }
   .cta:active { transform: scale(.96); }
   .ghost:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 6%, transparent); }
 }
@@ -168,7 +184,10 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   transition: background .3s var(--ease), color .3s var(--ease), border-color .3s var(--ease), transform .25s var(--ease);
 }
 .chip:active { transform: scale(.95); }
-.chip.on { background: var(--brand); color: var(--onb); border-color: var(--brand); }
+.chip.on { background: var(--brand); color: var(--onb); border-color: var(--brand); animation: chipOn .35s var(--spring); }
+@media (hover: hover) {
+  .chip:not(.on):hover { border-color: var(--brand); color: var(--ink); background: color-mix(in srgb, var(--brand) 7%, var(--card)); transform: translateY(-1px); }
+}
 
 /* Badges */
 .bd { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -245,6 +264,9 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   transition: transform .25s var(--ease);
 }
 .ticket button:active { transform: scale(.95); }
+@media (hover: hover) {
+  .ticket button:hover { transform: translateY(-1px); box-shadow: 0 6px 14px -6px rgba(15, 23, 42, .45); }
+}
 
 .dot.paused { background: var(--gold); color: var(--gold); animation: none; }
 
@@ -287,6 +309,9 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   transition: transform .25s var(--ease);
 }
 .resv-banner button:active { transform: scale(.95); }
+@media (hover: hover) {
+  .resv-banner button:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 6%, transparent); transform: translateY(-1px); }
+}
 
 /* Barra "N produtos · Filtros" */
 .list-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; }
@@ -300,6 +325,9 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   transition: transform .25s var(--ease);
 }
 .fbtn:active { transform: scale(.95); }
+@media (hover: hover) {
+  .fbtn:hover { border-color: var(--brand); color: var(--ink); background: color-mix(in srgb, var(--brand) 6%, var(--card)); transform: translateY(-1px); }
+}
 .fbtn .n {
   display: grid; place-items: center;
   min-width: 20px; height: 20px; border-radius: 99px;
@@ -447,6 +475,10 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   transition: transform .55s var(--spring);
 }
 .sheet.show .pane { transform: none; }
+/* Conteúdo do painel entra em cascata; os chips ganham um pequeno "pop". */
+.sheet.show .pane > * { animation: rise .5s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+.sheet.show .pane .chip { animation: pop .45s var(--ease) backwards; animation-delay: calc(var(--ci, 0) * 26ms); }
+.sheet.show .pane .chip.on { animation: chipOn .35s var(--spring); }
 .pane::before {                                    /* pega de arrastar (decorativa) */
   content: ""; display: block; width: 40px; height: 4px; margin: 0 auto 18px;
   border-radius: 4px; background: var(--bd-strong);
@@ -468,6 +500,9 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   transition: transform .25s var(--ease), background .25s;
 }
 .q button:active { transform: scale(.88); }
+@media (hover: hover) {
+  .q button:hover { background: color-mix(in srgb, var(--brand) 14%, var(--chip)); }
+}
 .tot { display: flex; justify-content: space-between; margin: 18px 0; font-weight: 800; font-size: 18px; letter-spacing: -.01em; }
 
 /* Confirmação: visto que se desenha */
@@ -495,6 +530,22 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
 }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
 
+/* Aviso de falta de ligação: fixo por cima de tudo (também do login) */
+.offline-note {
+  position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; z-index: 10000;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  max-width: calc(100% - 24px); padding: 9px 16px 9px 12px;
+  border-radius: 99px;
+  background: var(--ink); color: var(--bg);
+  font-size: 12px; line-height: 16px; font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  animation: offline .4s var(--ease) backwards;
+}
+.offline-note .ic { width: 18px; height: 18px; stroke-width: 2.2; }
+.offline-note b { font-weight: 800; }
+body.is-offline .toast { top: calc(62px + env(safe-area-inset-top, 0px)); }
+
 
 /* Carrinho: seletor Pedir agora / Reservar */
 .seg {
@@ -503,7 +554,12 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
 }
 .seg button {
   position: relative; z-index: 1; flex: 1; padding: 12px 8px; border-radius: 99px;
-  font-weight: 600; font-size: 14px; color: var(--mut); transition: color .3s var(--ease);
+  font-weight: 600; font-size: 14px; color: var(--mut);
+  transition: color .3s var(--ease), transform .2s var(--ease);
+}
+.seg button:active { transform: scale(.97); }
+@media (hover: hover) {
+  .seg button:not(.on):hover { color: var(--ink); }
 }
 .seg button.on { color: var(--ink); }
 .seg-thumb {
@@ -580,7 +636,15 @@ h3 { font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -.01e
   color: var(--onb); font-weight: 800; font-size: 20px;
 }
 
-.mrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 6px 0; text-align: left; }
+.mrow {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 6px 0; text-align: left;
+  border-radius: 14px;
+  transition: background-color .25s var(--ease), transform .2s var(--ease);
+}
+.mrow:active { transform: scale(.985); }
+@media (hover: hover) {
+  .mrow:hover { background: color-mix(in srgb, var(--brand) 5%, transparent); }
+}
 .mrow > div { flex: 1; }
 .card .mrow + .mrow { border-top: 1px solid var(--bd); }
 

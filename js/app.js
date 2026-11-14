@@ -13,6 +13,66 @@ function onFiltersChanged() {
   syncFiltersSheet();
 }
 
+/* ---------- Ligação ao servidor (aviso "Sem ligação") ---------- */
+
+let storeConnection = null;        // null = ainda não sabemos; false = última atualização falhou
+
+function updateConnectionBanner() {
+  const offline = !navigator.onLine || storeConnection === false;
+  const note = document.getElementById('offline-note');
+  if (note) note.hidden = !offline;
+  document.body.classList.toggle('is-offline', offline);
+}
+
+/** Chamado pela Store a cada atualização (ver js/store.js). */
+function setConnection(ok) {
+  storeConnection = ok;
+  updateConnectionBanner();
+}
+
+window.addEventListener('offline', updateConnectionBanner);
+window.addEventListener('online', () => {
+  updateConnectionBanner();
+  if (Auth.token()) Store.refresh();        // tenta recuperar os dados assim que houver rede
+});
+
+updateConnectionBanner();
+
+/** Notificação do sistema quando o aluno tem a app noutro separador. */
+function notifySystem(title, body, tag) {
+  if (!state.prefs.notifications) return;
+  Notifications.notifyIfAway(title, { body, tag });
+}
+
+/**
+ * A permissão do sistema tem de ser pedida a partir de um gesto. Se a
+ * preferência já vem ligada de outra sessão mas o browser ainda não deu
+ * permissão, aproveitamos o primeiro toque na app (menos no próprio
+ * interruptor, que trata do pedido em js/app.js → toggle-pref).
+ */
+function armNotificationPermission() {
+  if (!state.prefs.notifications || !Notifications.needsPermission()) return;
+
+  const ask = (event) => {
+    if (event.target instanceof Element && event.target.closest('[data-key="notifications"]')) return;
+    document.removeEventListener('pointerdown', ask, true);
+    if (!state.prefs.notifications || !Notifications.needsPermission()) return;
+    Notifications.requestPermission().then((result) => {
+      if (result !== 'granted') {
+        state.prefs.notifications = false;
+        persistPrefs();
+      }
+      if (state.view === 'more') renderMore();
+    });
+  };
+  document.addEventListener('pointerdown', ask, true);
+}
+
+/* O browser passou a permitir instalar a app: mostra a linha no ecrã "Mais". */
+document.addEventListener('pwa-installable', () => {
+  if (state.view === 'more') renderMore();
+});
+
 const ACTIONS = {
 
   /* --- Navegação --- */
@@ -46,16 +106,21 @@ const ACTIONS = {
 
   /* --- Pedir agora / reservar (no painel do carrinho) --- */
   'set-mode': (d) => { state.checkout.mode = d.mode; syncCheckout(); },
-  'set-day':  (d) => { state.checkout.day = d.value; state.checkout.time = null; renderSlots(); syncCheckout(); },
   'set-time': (d) => { state.checkout.time = d.value; syncCheckout(); },
 
   'pay': async () => {
     const total = cartTotal();
-    const { mode, day, time } = state.checkout;
+    const mode = state.checkout.mode;
     if (!total) return;
     if (mode === 'now' && isPaused()) return toast('O bar pausou os pedidos na hora. Podes reservar.');
     if (total > balance()) return toast('Carrega o saldo para continuar');
-    if (mode === 'reserve' && !time) return toast('Escolhe uma hora de levantamento');
+    if (mode === 'reserve') {
+      // O tempo passou enquanto o carrinho estava aberto: volta a validar a hora (só hoje, até às 18:00).
+      const days = ensureCheckoutDay();
+      if (!days.length) { renderSlots(); syncCheckout(); return toast('Já não há horas de reserva para hoje'); }
+      if (!state.checkout.time) { renderSlots(); syncCheckout(); return toast('Escolhe uma hora de levantamento'); }
+    }
+    const { day, time } = state.checkout;
 
     const result = await Store.placeOrder({
       ...ME,
@@ -78,6 +143,7 @@ const ACTIONS = {
         return toast(`Já não há ${findItem(result.itemId).name} suficiente`);
       }
       if (result.reason === 'paused') { syncCheckout(); return toast('O bar acabou de pausar os pedidos na hora'); }
+      if (result.reason === 'pickup') { renderSlots(); syncCheckout(); return toast(`Só podes reservar para hoje, até às ${RESERVATION.todayUntil}`); }
       return toast('Não foi possível concluir o pedido');
     }
 
@@ -120,12 +186,57 @@ const ACTIONS = {
   },
 
   /* --- Mais --- */
-  'toggle-pref': (d, el) => {
-    state.prefs[d.key] = !state.prefs[d.key];
-    el.classList.toggle('on', state.prefs[d.key]);          // no sítio → o interruptor desliza
+  'toggle-pref': async (d, el) => {
+    const turningOn = !state.prefs[d.key];
+
+    // Ativar os avisos precisa de permissão do sistema (pedida neste clique).
+    if (turningOn && d.key === 'notifications') {
+      const result = await Notifications.requestPermission();
+      if (result !== 'granted') {
+        state.prefs.notifications = false;
+        persistPrefs();
+        el.classList.remove('on');
+        el.setAttribute('aria-checked', 'false');
+        const hint = el.closest('.mrow')?.querySelector('small');
+        if (hint) hint.textContent = Notifications.statusHint();
+        return toast(result === 'denied'
+          ? 'Notificações bloqueadas nas definições do browser'
+          : 'Este dispositivo não suporta notificações');
+      }
+    }
+
+    state.prefs[d.key] = turningOn;
+    persistPrefs();                                          // mantém a escolha ao recarregar
+    el.classList.toggle('on', state.prefs[d.key]);            // no sítio → o interruptor desliza
     el.setAttribute('aria-checked', state.prefs[d.key]);
+    if (d.key === 'notifications') {
+      const hint = el.closest('.mrow')?.querySelector('small');
+      if (hint) hint.textContent = Notifications.statusHint();
+      if (state.prefs.notifications) toast('Avisos do sistema ativados');
+    }
   },
-  'logout': () => Auth.logout(),
+  'test-notification': async () => {
+    if (!Notifications.supported()) return toast('Este dispositivo não suporta notificações');
+    const result = await Notifications.requestPermission();
+    if (result !== 'granted') {
+      return toast(result === 'denied'
+        ? 'Notificações bloqueadas nas definições do browser'
+        : 'Não foi possível ativar as notificações');
+    }
+    const shown = await Notifications.show('Break+ESTG · teste', {
+      body: 'Se vês isto, as notificações do sistema estão a funcionar.',
+      tag: 'bp-test',
+    });
+    toast(shown ? 'Notificação de teste enviada' : 'Não foi possível mostrar a notificação');
+  },
+  'install-pwa': async () => {
+    const installed = await PWA.promptInstall();
+    if (installed) toast('Break+ instalado no ecrã principal');
+  },
+  'logout': () => {
+    try { localStorage.removeItem('bp_state_student'); } catch { /* sem armazenamento */ }
+    Auth.logout();
+  },
 
   /* --- Painel --- */
   'close-sheet': () => closeSheet(),
@@ -178,14 +289,18 @@ function announceBarActions() {
       if (o.status !== before.status) {
         if (o.status === 'ready' && state.prefs.notifications) {
           toast(`Pedido #${o.number} pronto! Levanta no balcão`, 4000);
+          notifySystem(`Pedido #${o.number} pronto!`, 'Levanta no balcão e mostra a senha.', `bp-order-${o.number}-ready`);
           if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
         } else if (o.status === 'preparing' && before.status === 'reserved') {
           toast(`A tua reserva #${o.number} já está a ser preparada`, 3000);
+          notifySystem(`Reserva #${o.number} a preparar`, `Já estamos a preparar o teu pedido para ${o.pickupTime || 'hoje'}.`, `bp-order-${o.number}-preparing`);
         } else if (o.status === 'cancelled' && o.cancelledBy === 'staff') {
           toast(`Pedido #${o.number} anulado pelo bar · ${eur(o.total)} devolvidos`, 4000);
+          notifySystem(`Pedido #${o.number} anulado pelo bar`, `${eur(o.total)} devolvidos ao teu saldo.`, `bp-order-${o.number}-cancelled`);
         }
       } else if ((o.notifiedAt || 0) > before.notified && state.prefs.notifications) {
         toast(`O bar está a chamar a senha #${o.number}`, 4000);
+        notifySystem(`Senha #${o.number} chamada`, 'Dirige-te ao balcão do bar.', `bp-order-${o.number}-call`);
       }
     }
   }
@@ -234,6 +349,8 @@ Auth.start({
     document.getElementById('greet-name').textContent = user.name.split(' ')[0];
     await Store.start();
     renderAll(); primeStore(); Store.subscribe(onStoreChange);
+    updateConnectionBanner();
+    armNotificationPermission();
     setInterval(renderBarInfo, 30000);      // a fila e as horas das reservas mudam com o tempo
   },
 });

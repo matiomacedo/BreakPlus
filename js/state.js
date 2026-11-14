@@ -7,6 +7,25 @@
    carrinho e preferências.
    ========================================================================== */
 
+/* Preferências guardadas no dispositivo: mantêm-se depois de recarregar. */
+const PREFS_KEY = 'bp_prefs_student';
+const DEFAULT_PREFS = { vegetarian: false, glutenFree: false, lactoseFree: false, notifications: true };
+
+function loadPrefs() {
+  const prefs = { ...DEFAULT_PREFS };
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    for (const key of Object.keys(DEFAULT_PREFS)) {
+      if (typeof saved[key] === 'boolean') prefs[key] = saved[key];
+    }
+  } catch { /* localStorage indisponível: usa os valores por omissão */ }
+  return prefs;
+}
+
+function persistPrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(state.prefs)); } catch { /* sem armazenamento */ }
+}
+
 const state = {
   view: 'bar',              // 'bar' | 'orders' | 'wallet' | 'more'
 
@@ -22,8 +41,8 @@ const state = {
 
   topupAmount: 10,
 
-  // Preferências (ecrã "Mais")
-  prefs: { vegetarian: false, glutenFree: false, lactoseFree: false, notifications: true },
+  // Preferências (ecrã "Mais"), persistidas em localStorage
+  prefs: loadPrefs(),
 };
 
 /* O aluno que está com sessão iniciada nesta app */
@@ -99,8 +118,10 @@ function slotsFor(date) {
   const now = new Date();
   const isToday = dateKey(date) === dateKey(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
+  // Hoje só se reserva até à hora definida em RESERVATION.todayUntil (18:00).
+  const lastMin = isToday ? toMinutes(RESERVATION.todayUntil) + 1 : toMinutes(BAR.close);
   const slots = [];
-  for (let m = toMinutes(BAR.open); m < toMinutes(BAR.close); m += RESERVATION.stepMin) {
+  for (let m = toMinutes(BAR.open); m < lastMin; m += RESERVATION.stepMin) {
     if (isToday && m < nowMin + RESERVATION.minLeadMin) continue;
     const time = fromMinutes(m);
     slots.push({ time, full: isSlotFull(dateKey(date), time) });
@@ -108,15 +129,11 @@ function slotsFor(date) {
   return slots;
 }
 
-/** Próximos dias que ainda têm pelo menos um horário livre. */
+/** As reservas são só para o dia de hoje (nunca para dias seguintes). */
 function reservationDays() {
-  const base = new Date(); base.setHours(0, 0, 0, 0);
-  const days = [];
-  for (let i = 0; i < 30 && days.length < RESERVATION.daysAhead; i++) {
-    const date = new Date(base); date.setDate(base.getDate() + i);
-    if (slotsFor(date).some((s) => !s.full)) days.push({ key: dateKey(date), label: dayLabel(date) });
-  }
-  return days;
+  const today = new Date();
+  if (!slotsFor(today).some((s) => !s.full)) return [];
+  return [{ key: dateKey(today), label: dayLabel(today) }];
 }
 
 /** Garante que o dia/hora escolhidos ainda são válidos (o tempo passa). */

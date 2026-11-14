@@ -6,6 +6,8 @@
 const Store = createStore({
   request: Auth.api,
   statePath: '/api/state',
+  cacheKey: 'bp_state_student',
+  onConnection: (ok, reason) => setConnection(ok, reason),
   actions: ({ post, withOrder }) => ({
     async placeOrder(p) {
       let pickupAt = null;

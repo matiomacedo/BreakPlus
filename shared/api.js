@@ -32,8 +32,9 @@ async function requestJson(path, { body, headers = {} } = {}) {
  * request(path, body?) → resposta JSON do servidor
  * actions({ post, withOrder }) → ações de escrita desta app (ficam no objeto devolvido)
  * onConnection(ok, reason) → chamado a cada atualização (para mostrar erros de ligação)
+ * cacheKey → opcional: guarda a última resposta em localStorage para abrir sem rede
  */
-function createStore({ request, statePath, actions, onConnection = () => {} }) {
+function createStore({ request, statePath, actions, onConnection = () => {}, cacheKey = null }) {
   const whenText = (ts) => {
     const d = new Date(ts), t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     return d.toDateString() === new Date().toDateString() ? `Hoje · ${t}` : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} · ${t}`;
@@ -42,9 +43,30 @@ function createStore({ request, statePath, actions, onConnection = () => {} }) {
 
   const normOrder = (o) => ({ ...o, when: whenText(o.createdAt), notifiedAt: o.notifiedAt || 0 });
   const normWallet = (w) => ({ balance: w.balance, transactions: w.transactions.map((t) => ({ label: TX_LABEL[t.kind](t), when: whenText(t.createdAt), value: t.amount })) });
+  const emptyState = () => ({ stock: {}, paused: false, queueSize: 0, avgPrepSec: null, wallet: { balance: 0, transactions: [] }, orders: [] });
+  const hydrate = (r) => ({
+    ...r,
+    orders: Array.isArray(r.orders) ? r.orders.map(normOrder) : [],
+    wallet: r.wallet ? normWallet(r.wallet) : emptyState().wallet,
+  });
 
-  let data = { stock: {}, paused: false, queueSize: 0, avgPrepSec: null, wallet: { balance: 0, transactions: [] }, orders: [] };
-  let signature = '';
+  /** Última resposta boa (para a app abrir com dados quando não há rede). */
+  function readCache() {
+    if (!cacheKey) return null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(cacheKey));
+      return saved && saved.stock ? saved : null;
+    } catch { return null; }
+  }
+
+  function writeCache(raw) {
+    if (!cacheKey) return;
+    try { localStorage.setItem(cacheKey, JSON.stringify(raw)); } catch { /* cache cheio ou indisponível */ }
+  }
+
+  const cached = readCache();
+  let data = cached ? hydrate(cached) : emptyState();
+  let signature = cached ? JSON.stringify(cached) : '';
   const subscribers = new Set();
   const LIVE = ['received', 'preparing', 'ready'];
 
@@ -55,7 +77,8 @@ function createStore({ request, statePath, actions, onConnection = () => {} }) {
     const sig = JSON.stringify(r);
     if (sig === signature) return;
     signature = sig;
-    data = { ...r, orders: r.orders.map(normOrder), wallet: r.wallet ? normWallet(r.wallet) : data.wallet };
+    data = hydrate(r);
+    writeCache(r);
     subscribers.forEach((fn) => fn());
   }
 

@@ -8,7 +8,16 @@ after(stopServer);
 beforeEach(resetData);
 
 const inMinutes = (m) => Date.now() + m * 60000;
-const reservation = (pickupAt, items = { 1: 1 }) => ({ type: 'reservation', items, pickupKey: '2099-01-01', pickupTime: '10:00', pickupAt });
+const reservation = (pickupAt, items = { 1: 1 }) => ({
+  type: 'reservation', items, pickupKey: todayKey(), pickupTime: '18:00', pickupAt,
+});
+const keyInDays = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const todayKey = () => keyInDays(0);
 
 test('login em 2 passos: password certa e PIN certo dão um token de sessão', async () => {
   const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
@@ -101,6 +110,33 @@ test('quantidades em texto ("2") são guardadas como números', async () => {
   const token = await login();
   const r = await call('/api/orders', { token, body: { type: 'now', items: { 1: '2' } } });
   assert.deepEqual(r.body.order.items, { 1: 2 });
+});
+
+test('reserva para hoje depois das 18:00 é recusada (limite do dia atual)', async () => {
+  const token = await login();
+  const r = await call('/api/orders', {
+    token,
+    body: { type: 'reservation', items: { 1: 1 }, pickupKey: todayKey(), pickupTime: '18:30', pickupAt: inMinutes(120) },
+  });
+  assert.deepEqual([r.status, r.body.reason], [400, 'pickup']);
+});
+
+test('reserva para hoje até às 18:00 é aceite', async () => {
+  const token = await login();
+  const r = await call('/api/orders', {
+    token,
+    body: { type: 'reservation', items: { 1: 1 }, pickupKey: todayKey(), pickupTime: '18:00', pickupAt: inMinutes(120) },
+  });
+  assert.equal(r.body.ok, true);
+});
+
+test('reserva para outro dia é recusada (só se reserva para hoje)', async () => {
+  const token = await login();
+  const r = await call('/api/orders', {
+    token,
+    body: { type: 'reservation', items: { 1: 1 }, pickupKey: keyInDays(1), pickupTime: '10:00', pickupAt: inMinutes(120) },
+  });
+  assert.deepEqual([r.status, r.body.reason], [400, 'pickup']);
 });
 
 for (const [pickupKey, pickupTime] of [['2099-01-01', '<img src=x onerror=alert(1)>'], ['<b>x</b>', '10:00'], ['2099-1-1', '10:00'], ['2099-01-01', '25:00']]) {
