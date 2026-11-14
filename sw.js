@@ -14,7 +14,7 @@
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v12';
+const CACHE_VERSION = 'breakplus-v13';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 
@@ -26,6 +26,7 @@ const APP_SHELL = [
   './css/styles.css',
   './css/auth.css',
   './shared/tokens.css',
+  './shared/boot.css',
   './shared/data.js',
   './shared/util.js',
   './shared/api.js',

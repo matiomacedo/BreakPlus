@@ -40,11 +40,75 @@ Depois de configurares `server/.env` e `terminal/config.js` (passos 1 e 2), faz 
 | `server/.env` | `MONGODB_URI`, `JWT_SECRET`, `TERMINAL_KEY`, `CORS_ORIGINS`, `PORT`, `DATA_JS` (ver `server/.env.example`) | **não** |
 | `terminal/config.js` | `terminalKey` (= `TERMINAL_KEY`) e `apiUrl` opcional | **não** (modelo: `config.example.js`) |
 | `js/config.js` | `apiUrl` da app dos alunos (vazio = mesmo computador, porta 3000) | sim |
+| variáveis da Vercel | `BREAKPLUS_API_URL` e `TERMINAL_KEY` → geram `dist/js/config.js` e `dist/terminal/config.js` no build | — (só no deploy) |
 
 O servidor recusa arrancar se faltar `MONGODB_URI`, `JWT_SECRET` ou `TERMINAL_KEY`, ou se o MongoDB não for um replica set.
 
 > A chave do terminal está num ficheiro estático: quem conseguir abrir `/terminal/config.js` consegue lê-la.
 > Serve a pasta `terminal/` só no computador do balcão (ou na rede interna), não no mesmo servidor público da app dos alunos.
+
+## Publicar online (Render + Vercel)
+
+A API fica no **Render** e o frontend estático na **Vercel**. O `terminal/config.js` continua fora do git: na Vercel é **gerado no build** a partir de variáveis de ambiente.
+
+### 1. API no Render (Web Service)
+
+| Campo | Valor |
+|---|---|
+| **Root Directory** | `server` |
+| **Build Command** | `npm ci --omit=dev` (ou `npm install --omit=dev`) |
+| **Start Command** | `npm start` |
+| **Health Check Path** | vazio |
+| **Instance Type** | Free (sofre cold starts: a primeira chamada pode demorar ~5 s) |
+
+Variáveis de ambiente:
+
+| Nome | Valor |
+|---|---|
+| `MONGODB_URI` | connection string do MongoDB Atlas |
+| `JWT_SECRET` | segredo aleatório novo |
+| `TERMINAL_KEY` | chave aleatória nova (a mesma que a Vercel vai receber) |
+| `CORS_ORIGINS` | `https://breakplus-one.vercel.app` (o domínio da Vercel; aceita vários separados por vírgula) |
+| `NODE_ENV` | `production` |
+
+Não definir `PORT` (o Render atribui) nem `DATA_JS` (o default `../shared/data.js` funciona porque o repositório completo é clonado).
+
+Gerar segredos:
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+No MongoDB Atlas, **Network Access** tem de permitir o Render. No plano free os IPs de saída não são fixos, por isso usa `0.0.0.0/0` (mantém uma password forte no utilizador da BD).
+
+### 2. Frontend na Vercel
+
+O `vercel.json` já define o build (`node scripts/build-config.js`) e a pasta publicada (`dist/`). Em **Settings → Environment Variables** define:
+
+| Nome | Valor |
+|---|---|
+| `BREAKPLUS_API_URL` | `https://breakplus.onrender.com` (o URL do Render, sem `/` no fim) |
+| `TERMINAL_KEY` | exatamente o mesmo valor de `TERMINAL_KEY` do Render |
+
+O script copia o frontend para `dist/` e gera:
+
+- `dist/js/config.js` → `apiUrl`
+- `dist/terminal/config.js` → `apiUrl` + `terminalKey`
+
+Assim o `/terminal` funciona online sem nenhuma chave no repositório. Se mudares `TERMINAL_KEY` no Render, atualiza a variável na Vercel e faz **Redeploy**; senão o terminal fica com `401 terminal_key`.
+
+Em desenvolvimento local nada disto é preciso: continua a usar `terminal/config.js` e `js/config.js` como antes.
+
+> A chave gerada para o terminal fica visível no JavaScript servido ao browser. Como o terminal não tem login, qualquer pessoa com o URL poderia chamar a API do terminal. Para uso real, protege o `/terminal` (Vercel Password Protection, rede interna ou um proxy com autenticação).
+
+### 3. Ordem recomendada
+
+1. Atlas → permitir o Render em Network Access.
+2. Render → criar o serviço e copiar o URL público.
+3. Vercel → definir `BREAKPLUS_API_URL` e `TERMINAL_KEY` e fazer deploy.
+4. Copiar o domínio final da Vercel para `CORS_ORIGINS` no Render e guardar (o Render reinicia).
+5. Abrir a app, entrar e confirmar na consola do browser que não há erros de CORS.
+6. Se o domínio da API ou a chave mudarem, sobe `CACHE_VERSION` em `sw.js` para as PWAs instaladas não continuarem com a configuração antiga em cache.
 
 ## O que cada uma faz
 
@@ -118,6 +182,10 @@ shared/
   util.js             funções puras (formatação, datas, totais)
   api.js              requestJson() + createStore(): estado do servidor, atualizado de 2,5 em 2,5 s
   tokens.css          cores e sombras comuns às duas apps
+  boot.css            ecrã de carregamento inicial (spinner) das duas apps
+scripts/
+  build-config.js     build da Vercel: copia o frontend para dist/ e gera os config.js
+vercel.json           build e pasta publicada na Vercel
 server/               API (ver server/README.md)
 images/               logótipo e fotos dos pratos (nomes em shared/data.js)
 ProfilePictureUser/   fotografias de perfil (avatar dos utilizadores)
