@@ -201,3 +201,33 @@ test('uma subscrição inválida é recusada', async () => {
     assert.deepEqual([r.status, r.body.reason], [400, 'bad_subscription']);
   }
 });
+
+test('o estado e o teste de Web Push contam os dispositivos subscritos', async () => {
+  const webpush = require('web-push');
+  const token = await login();
+
+  const before = await call('/api/push/status', { token });
+  assert.equal(before.body.subscriptions, 0);
+
+  const empty = await call('/api/push/test', { token, body: {} });
+  assert.equal(empty.body.ok, true);
+  assert.equal(empty.body.sent, 0);
+
+  await call('/api/push/subscribe', {
+    token,
+    body: { subscription: { endpoint: 'https://push.example/sub/test', keys: { p256dh: 'chave', auth: 'auth' } } },
+  });
+  const after = await call('/api/push/status', { token });
+  assert.equal(after.body.subscriptions, 1);
+
+  const sent = [];
+  const original = webpush.sendNotification;
+  webpush.sendNotification = async (_subscription, payload) => { sent.push(JSON.parse(payload)); return {}; };
+  try {
+    const test = await call('/api/push/test', { token, body: {} });
+    assert.equal(test.body.sent, 1);
+  } finally {
+    webpush.sendNotification = original;
+  }
+  assert.equal(sent[0].tag, 'bp-test-push');
+});

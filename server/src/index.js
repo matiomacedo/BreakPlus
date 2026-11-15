@@ -12,5 +12,6 @@ const { assertReplicaSet } = require('./db');
   await mongoose.connect(config.mongoUri);
   await assertReplicaSet();
   if (!config.corsOrigins.length) console.warn('Aviso: CORS_ORIGINS vazio, nenhuma página noutra origem consegue usar a API.');
-  createApp(config).listen(config.port, () => console.log('API em http://localhost:' + config.port));
+  const commit = process.env.RENDER_GIT_COMMIT;
+  createApp(config).listen(config.port, () => console.log('API em http://localhost:' + config.port + (commit ? ' (commit ' + commit.slice(0, 7) + ')' : '')));
 })().catch((e) => { console.error(e.message); process.exit(1); });

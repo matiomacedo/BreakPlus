@@ -364,6 +364,9 @@ function renderMore() {
       <button class="mrow" data-action="test-notification">
         <div><b>Testar notificação</b><small>Envia um aviso de exemplo para este dispositivo</small></div>
       </button>
+      <button class="mrow" data-action="test-push">
+        <div><b>Testar com a app fechada</b><small>Pede ao servidor um aviso Web Push (fecha a app depois)</small></div>
+      </button>
     </div>
 
     <div class="cl sec">Aplicação</div>

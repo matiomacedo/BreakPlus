@@ -162,6 +162,8 @@ Com a app **fechada** é o servidor que envia o aviso, por **Web Push**: o termi
 - Para as usar a partir do ambiente (opcional), definir `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (por omissão `https://breakplus-one.vercel.app`).
 - No iPhone, o Web Push só funciona com a app **instalada no ecrã principal** (iOS 16.4+). No Android/Chrome funciona no browser e na PWA.
 - As subscrições inválidas (404/410) são apagadas automaticamente.
+- No ecrã **Mais** existe **Testar com a app fechada**: pede ao servidor um aviso Web Push e diz quantos dispositivos o receberam. Serve para confirmar que o servidor está atualizado (`GET /api/version` mostra o commit em produção).
+- Se o servidor ainda não tiver o Web Push, o teste avisa “A API ainda não tem o Web Push”.
 
 ### Testar com dois separadores
 

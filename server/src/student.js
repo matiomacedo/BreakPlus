@@ -68,6 +68,9 @@ function studentRouter() {
 
   /* ---------- Notificações Web Push (chegam com a app fechada) ---------- */
 
+  // Diagnóstico do deploy: permite confirmar qual commit está a correr no Render.
+  r.get('/version', (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null }));
+
   r.get('/push/public-key', wrap(async (_req, res) => {
     const key = await push.publicKey();
     if (!key) throw fail('push_off', {}, 503);
@@ -94,6 +97,21 @@ function studentRouter() {
     const endpoint = String((req.body && req.body.endpoint) || '');
     if (endpoint) await PushSubscription.deleteOne({ endpoint, user: req.user._id });
     res.json({ ok: true });
+  }));
+
+  // Diagnóstico: quantos dispositivos deste aluno estão subscritos.
+  r.get('/push/status', auth, wrap(async (req, res) => {
+    res.json({ ok: true, subscriptions: await PushSubscription.countDocuments({ user: req.user._id }) });
+  }));
+
+  // Teste real: o servidor envia o aviso (confirma o Web Push com a app fechada).
+  r.post('/push/test', auth, wrap(async (req, res) => {
+    const sent = await push.sendToUser(req.user._id, {
+      title: 'Break+ESTG · teste',
+      body: 'Se vês isto com a app fechada, o Web Push está a funcionar.',
+      tag: 'bp-test-push',
+    });
+    res.json({ ok: true, sent });
   }));
 
   /* ---------- Dados ---------- */

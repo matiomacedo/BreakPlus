@@ -65,13 +65,15 @@ async function publicKey() {
 /**
  * Envia uma notificação para todos os dispositivos do aluno.
  * `payload`: { title, body, tag, url } — ver o handler `push` em sw.js.
+ * Devolve quantos dispositivos receberam o aviso.
  */
 async function sendToUser(userId, payload) {
-  if (!userId) return;
+  if (!userId) return 0;
   const k = await ready();
-  if (!k) return;
+  if (!k) return 0;
 
   const subscriptions = await PushSubscription.find({ user: userId });
+  let sent = 0;
   await Promise.all(subscriptions.map(async (sub) => {
     try {
       await webpush.sendNotification(
@@ -79,6 +81,7 @@ async function sendToUser(userId, payload) {
         JSON.stringify(payload),
         { TTL: 600, urgency: 'high' },
       );
+      sent += 1;
     } catch (error) {
       // 404/410 = o browser desinstalou a app ou revogou a permissão: limpar.
       if (error.statusCode === 404 || error.statusCode === 410) {
@@ -88,6 +91,7 @@ async function sendToUser(userId, payload) {
       }
     }
   }));
+  return sent;
 }
 
 /** Envia sem bloquear a resposta HTTP (o terminal não deve esperar pelo push). */
