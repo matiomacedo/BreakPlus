@@ -1,0 +1,40 @@
+/* ==========================================================================
+   shared/boot.css — ecrã de carregamento comum às duas apps.
+
+   O overlay fica visível até a app ter a sessão/estado prontos. É controlado
+   por js/auth.js (app dos alunos) e terminal/js/app.js (terminal).
+   ========================================================================== */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--mut);
+  font: 600 14px/20px 'Plus Jakarta Sans', system-ui, sans-serif;
+  text-align: center;
+}
+
+.boot[hidden] { display: none; }
+
+.boot-spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--brand) 18%, transparent);
+  border-top-color: var(--brand);
+  animation: boot-spin .8s linear infinite;
+}
+
+@keyframes boot-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-spinner { animation-duration: 2.4s; }
+}

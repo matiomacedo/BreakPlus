@@ -20,6 +20,16 @@ const Auth = (() => {
     try { localStorage.setItem(userKey(), JSON.stringify(user)); } catch { /* sem armazenamento */ }
   };
 
+  /** Overlay de carregamento (shared/boot.css): útil quando o servidor está a acordar. */
+  const boot = (message) => {
+    const overlay = el('boot');
+    if (!overlay) return;
+    const text = el('boot-msg');
+    if (text && message) text.textContent = message;
+    overlay.hidden = false;
+  };
+  const bootDone = () => { const overlay = el('boot'); if (overlay) overlay.hidden = true; };
+
   /** fetch ao servidor com o token. Sessão expirada → volta ao login. */
   async function api(path, body) {
     const { status, data } = await requestJson(path, { body, headers: token() ? { Authorization: 'Bearer ' + token() } : {} });
@@ -37,12 +47,21 @@ const Auth = (() => {
   const allowed = (u) => !cfg.roles.length || cfg.roles.includes(u.role);
   const drawDots = () => document.querySelectorAll('#pin-dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
 
-  function enter(user) { el('auth').hidden = true; cfg.onEnter(user); }
+  async function enter(user) {
+    el('auth').hidden = true;
+    boot('A carregar os teus dados…');
+    try {
+      await cfg.onEnter(user);
+    } finally {
+      bootDone();
+    }
+  }
 
   /** O servidor recusou mesmo a sessão (401): só aí se apaga o token. */
   function rejectSession(message = '') {
     localStorage.removeItem(cfg.key);
     localStorage.removeItem(userKey());
+    bootDone();
     el('auth').hidden = false;
     el('auth-retry').hidden = true;
     err(message);
@@ -52,6 +71,7 @@ const Auth = (() => {
   function offline() {
     const user = cachedUser();
     if (user && allowed(user)) return enter(user);
+    bootDone();
     el('auth').hidden = false;
     el('auth-retry').hidden = false;
     err('Sem ligação ao servidor');
@@ -62,6 +82,7 @@ const Auth = (() => {
   async function resume() {
     if (resuming) return;
     resuming = true;
+    boot('A validar a sessão…');
     try {
       const { status, data } = await requestJson('/api/auth/me', {
         headers: token() ? { Authorization: 'Bearer ' + token() } : {},
@@ -73,6 +94,8 @@ const Auth = (() => {
       }
       if (status === 401 && data.reason === 'unauthenticated') return rejectSession();
       offline();                                  // rede/servidor em baixo: sessão fica guardada
+    } catch {
+      offline();
     } finally {
       resuming = false;
     }
@@ -81,29 +104,39 @@ const Auth = (() => {
   async function submitLogin() {
     const email = el('auth-email').value, password = el('auth-pass').value;
     if (!email || !password) return err('Preenche o email e a password');
-    const r = await api('/api/auth/login', { email, password });
-    if (r.ok) { preToken = r.preToken; pin = ''; drawDots(); el('auth-hello').textContent = 'Olá, ' + r.name.split(' ')[0]; return step(2); }
-    err(r.reason === 'locked' ? `Demasiadas tentativas. Tenta daqui a ${r.minutes} min`
-      : r.reason === 'credentials' ? 'Email ou password incorretos' : 'Sem ligação ao servidor');
+    boot('A entrar…');
+    try {
+      const r = await api('/api/auth/login', { email, password });
+      if (r.ok) { preToken = r.preToken; pin = ''; drawDots(); el('auth-hello').textContent = 'Olá, ' + r.name.split(' ')[0]; return step(2); }
+      err(r.reason === 'locked' ? `Demasiadas tentativas. Tenta daqui a ${r.minutes} min`
+        : r.reason === 'credentials' ? 'Email ou password incorretos' : 'Sem ligação ao servidor');
+    } finally {
+      bootDone();
+    }
   }
 
   async function press(key) {
     if (key === 'back') pin = pin.slice(0, -1); else if (pin.length < 4) pin += key;
     drawDots(); err('');
     if (pin.length < 4) return;
-    const r = await api('/api/auth/pin', { preToken, pin });
-    if (r.ok) {
-      if (!allowed(r.user)) { pin = ''; drawDots(); step(1); return err('Esta conta não tem acesso a esta aplicação'); }
-      localStorage.setItem(cfg.key, r.token);
-      saveUser(r.user);
-      return enter(r.user);
+    boot('A confirmar o PIN…');
+    try {
+      const r = await api('/api/auth/pin', { preToken, pin });
+      if (r.ok) {
+        if (!allowed(r.user)) { pin = ''; drawDots(); step(1); return err('Esta conta não tem acesso a esta aplicação'); }
+        localStorage.setItem(cfg.key, r.token);
+        saveUser(r.user);
+        return enter(r.user);                     // enter() mantém o overlay até os dados carregarem
+      }
+      pin = ''; drawDots();
+      const dots = el('pin-dots'); dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake');
+      if (r.reason === 'expired') { step(1); return err('A sessão expirou. Entra outra vez'); }
+      err(r.reason === 'locked' ? `Conta bloqueada. Tenta daqui a ${r.minutes} min`
+        : r.reason === 'pin' ? (r.attemptsLeft ? `PIN incorreto · ${r.attemptsLeft} tentativas` : 'Conta bloqueada por 5 min')
+        : 'Sem ligação ao servidor');
+    } finally {
+      bootDone();
     }
-    pin = ''; drawDots();
-    const dots = el('pin-dots'); dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake');
-    if (r.reason === 'expired') { step(1); return err('A sessão expirou. Entra outra vez'); }
-    err(r.reason === 'locked' ? `Conta bloqueada. Tenta daqui a ${r.minutes} min`
-      : r.reason === 'pin' ? (r.attemptsLeft ? `PIN incorreto · ${r.attemptsLeft} tentativas` : 'Conta bloqueada por 5 min')
-      : 'Sem ligação ao servidor');
   }
 
   function start(config) {
@@ -123,8 +156,31 @@ const Auth = (() => {
       if (el('auth').hidden || el('auth-s2').hidden) return;
       if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('back');
     });
+
+    /* Teclado do telemóvel: rola o campo focado para ficar acima do teclado.
+       O zoom continua bloqueado (shared/nozoom.js); aqui só se ajusta o scroll. */
+    const auth = el('auth');
+    const isField = (node) => node instanceof Element && /^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName);
+    const revealFocused = () => {
+      const field = document.activeElement;
+      if (!field || !isField(field) || !auth.contains(field)) return;
+      const vv = window.visualViewport;
+      const top = vv ? vv.offsetTop : 0;
+      const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const rect = field.getBoundingClientRect();
+      const margin = 16;
+      if (rect.bottom > bottom - margin) auth.scrollTop += rect.bottom - (bottom - margin);
+      else if (rect.top < top + margin) auth.scrollTop -= (top + margin) - rect.top;
+    };
+    auth.addEventListener('focusin', (event) => {
+      if (isField(event.target)) setTimeout(revealFocused, 320);   // espera o teclado abrir
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => setTimeout(revealFocused, 60));
+    }
+
     if (token()) resume();
-    else el('auth').hidden = false;
+    else { bootDone(); el('auth').hidden = false; }
   }
 
   return { start, api, token, logout };

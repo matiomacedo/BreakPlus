@@ -40,11 +40,75 @@ Depois de configurares `server/.env` e `terminal/config.js` (passos 1 e 2), faz 
 | `server/.env` | `MONGODB_URI`, `JWT_SECRET`, `TERMINAL_KEY`, `CORS_ORIGINS`, `PORT`, `DATA_JS` (ver `server/.env.example`) | **não** |
 | `terminal/config.js` | `terminalKey` (= `TERMINAL_KEY`) e `apiUrl` opcional | **não** (modelo: `config.example.js`) |
 | `js/config.js` | `apiUrl` da app dos alunos (vazio = mesmo computador, porta 3000) | sim |
+| variáveis da Vercel | `BREAKPLUS_API_URL` e `TERMINAL_KEY` → geram `dist/js/config.js` e `dist/terminal/config.js` no build | — (só no deploy) |
 
 O servidor recusa arrancar se faltar `MONGODB_URI`, `JWT_SECRET` ou `TERMINAL_KEY`, ou se o MongoDB não for um replica set.
 
 > A chave do terminal está num ficheiro estático: quem conseguir abrir `/terminal/config.js` consegue lê-la.
 > Serve a pasta `terminal/` só no computador do balcão (ou na rede interna), não no mesmo servidor público da app dos alunos.
+
+## Publicar online (Render + Vercel)
+
+A API fica no **Render** e o frontend estático na **Vercel**. O `terminal/config.js` continua fora do git: na Vercel é **gerado no build** a partir de variáveis de ambiente.
+
+### 1. API no Render (Web Service)
+
+| Campo | Valor |
+|---|---|
+| **Root Directory** | `server` |
+| **Build Command** | `npm ci --omit=dev` (ou `npm install --omit=dev`) |
+| **Start Command** | `npm start` |
+| **Health Check Path** | vazio |
+| **Instance Type** | Free (sofre cold starts: a primeira chamada pode demorar ~5 s) |
+
+Variáveis de ambiente:
+
+| Nome | Valor |
+|---|---|
+| `MONGODB_URI` | connection string do MongoDB Atlas |
+| `JWT_SECRET` | segredo aleatório novo |
+| `TERMINAL_KEY` | chave aleatória nova (a mesma que a Vercel vai receber) |
+| `CORS_ORIGINS` | `https://breakplus-one.vercel.app` (o domínio da Vercel; aceita vários separados por vírgula) |
+| `NODE_ENV` | `production` |
+
+Não definir `PORT` (o Render atribui) nem `DATA_JS` (o default `../shared/data.js` funciona porque o repositório completo é clonado).
+
+Gerar segredos:
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+No MongoDB Atlas, **Network Access** tem de permitir o Render. No plano free os IPs de saída não são fixos, por isso usa `0.0.0.0/0` (mantém uma password forte no utilizador da BD).
+
+### 2. Frontend na Vercel
+
+O `vercel.json` já define o build (`node scripts/build-config.js`) e a pasta publicada (`dist/`). Em **Settings → Environment Variables** define:
+
+| Nome | Valor |
+|---|---|
+| `BREAKPLUS_API_URL` | `https://breakplus.onrender.com` (o URL do Render, sem `/` no fim) |
+| `TERMINAL_KEY` | exatamente o mesmo valor de `TERMINAL_KEY` do Render |
+
+O script copia o frontend para `dist/` e gera:
+
+- `dist/js/config.js` → `apiUrl`
+- `dist/terminal/config.js` → `apiUrl` + `terminalKey`
+
+Assim o `/terminal` funciona online sem nenhuma chave no repositório. Se mudares `TERMINAL_KEY` no Render, atualiza a variável na Vercel e faz **Redeploy**; senão o terminal fica com `401 terminal_key`.
+
+Em desenvolvimento local nada disto é preciso: continua a usar `terminal/config.js` e `js/config.js` como antes.
+
+> A chave gerada para o terminal fica visível no JavaScript servido ao browser. Como o terminal não tem login, qualquer pessoa com o URL poderia chamar a API do terminal. Para uso real, protege o `/terminal` (Vercel Password Protection, rede interna ou um proxy com autenticação).
+
+### 3. Ordem recomendada
+
+1. Atlas → permitir o Render em Network Access.
+2. Render → criar o serviço e copiar o URL público.
+3. Vercel → definir `BREAKPLUS_API_URL` e `TERMINAL_KEY` e fazer deploy.
+4. Copiar o domínio final da Vercel para `CORS_ORIGINS` no Render e guardar (o Render reinicia).
+5. Abrir a app, entrar e confirmar na consola do browser que não há erros de CORS.
+6. Se o domínio da API ou a chave mudarem, sobe `CACHE_VERSION` em `sw.js` para as PWAs instaladas não continuarem com a configuração antiga em cache.
 
 ## O que cada uma faz
 
@@ -68,6 +132,7 @@ A app dos alunos pode ser instalada no ecrã principal e abre em ecrã completo 
 - **Android (Chrome):** abrir a app em `http(s)://…`, menu ⋮ → **Instalar app** (ou **Adicionar ao ecrã principal**). Confirmar que abre sem barra de endereço e com o ícone do Break+.
 - **iOS (Safari):** **Partilhar** → **Adicionar ao ecrã principal**. Abre a partir do ícone em ecrã completo.
 - O service worker e a instalação exigem `http://localhost` ou HTTPS; por `file://` a app funciona, mas sem cache offline.
+- No telemóvel a app mantém o zoom fixo: o pinch e o duplo-toque estão desativados (`shared/nozoom.js` + `touch-action`), e os campos de login usam 16px para o iOS não ampliar ao focar.
 
 > Ao alterar ficheiros da app, sobe `CACHE_VERSION` em `sw.js` para os clientes antigos receberem a versão nova.
 
@@ -82,16 +147,23 @@ O avatar do ecrã **Mais** mostra a fotografia do utilizador quando existe; sem 
 
 ## Avisos do pedido como notificação do sistema
 
-O toast dentro da app continua a existir, mas quando a app está noutro separador ou em segundo plano o aluno recebe uma **notificação do sistema** (Notification API + service worker).
+O toast dentro da app continua a existir, mas cada mudança de pedido aparece também na **central de notificações** do telemóvel (Notification API + service worker), mesmo com a app aberta.
 
-- A preferência **Aviso de pedido pronto** (ecrã **Mais**) fica guardada em `localStorage` e já não se perde ao recarregar; controla também os avisos de senha chamada, reserva a preparar e anulação.
+- A preferência **Aviso de pedido pronto** (ecrã **Mais**) fica guardada em `localStorage` e já não se perde ao recarregar; controla também os avisos de senha chamada e anulação.
 - Ao ligar a preferência, o browser pede permissão. Se a preferência já vinha ligada, o pedido é feito no primeiro toque na app.
-- Avisos: pedido **pronto**, bar a **chamar a senha**, reserva a começar a ser **preparada** e pedido **anulado pelo bar** (com o valor devolvido).
-- Os avisos reagem às atualizações da `Store` (`shared/api.js`). Hoje a Store atualiza por polling de 2,5 s; quando o [#1 — Atualização em tempo real com WebSockets (Socket.IO)] estiver ligado, os mesmos eventos disparam as notificações sem alterar esta lógica.
+- Avisos: pedido **pronto**, bar a **chamar a senha** e pedido **anulado pelo bar** (com o valor devolvido).
+- Com a app aberta, os avisos reagem às atualizações da `Store` (`shared/api.js`, polling de 2,5 s) e são mostrados pelo service worker.
 
-### Limitação: app fechada (Web Push)
+### App fechada (Web Push)
 
-Enquanto a app estiver aberta/em segundo plano, as notificações funcionam. Com a app **fechada**, seria preciso **Web Push** com um servidor de push (VAPID) e subscrições guardadas no backend — isso está fora do âmbito atual. O handler `push` do `sw.js` já está preparado para quando essa parte existir.
+Com a app **fechada** é o servidor que envia o aviso, por **Web Push**: o terminal muda o estado do pedido e o servidor notifica os dispositivos subscritos desse aluno. A subscrição é criada no primeiro login com os avisos ligados e renovada a cada arranque (`Notifications.syncPush()`); o servidor guarda-a em `PushSubscription`.
+
+- As chaves **VAPID** são geradas automaticamente no primeiro envio e ficam guardadas na coleção `Setting` (`_id: push`). Não é preciso configurar nada no Render.
+- Para as usar a partir do ambiente (opcional), definir `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (por omissão `https://breakplus-one.vercel.app`).
+- No iPhone, o Web Push só funciona com a app **instalada no ecrã principal** (iOS 16.4+). No Android/Chrome funciona no browser e na PWA.
+- As subscrições inválidas (404/410) são apagadas automaticamente.
+- No ecrã **Mais** existe **Testar com a app fechada**: pede ao servidor um aviso Web Push e diz quantos dispositivos o receberam. Serve para confirmar que o servidor está atualizado (`GET /api/version` mostra o commit em produção).
+- Se o servidor ainda não tiver o Web Push, o teste avisa “A API ainda não tem o Web Push”.
 
 ### Testar com dois separadores
 
@@ -99,6 +171,7 @@ Enquanto a app estiver aberta/em segundo plano, as notificações funcionam. Com
 2. Deixar a app noutro separador (ou minimizar a janela).
 3. No terminal do bar, avançar um pedido até **Pronto**.
 4. Confirmar que aparece a notificação do sistema com o número do pedido.
+5. Fechar a app por completo e repetir o passo 3: o aviso deve chegar via Web Push (instalar a PWA no iPhone).
 
 ## Estrutura
 
@@ -118,6 +191,11 @@ shared/
   util.js             funções puras (formatação, datas, totais)
   api.js              requestJson() + createStore(): estado do servidor, atualizado de 2,5 em 2,5 s
   tokens.css          cores e sombras comuns às duas apps
+  boot.css            ecrã de carregamento inicial (spinner) das duas apps
+  nozoom.js           bloqueia o zoom por gesto nas duas apps (telemóvel/PWA)
+scripts/
+  build-config.js     build da Vercel: copia o frontend para dist/ e gera os config.js
+vercel.json           build e pasta publicada na Vercel
 server/               API (ver server/README.md)
 images/               logótipo e fotos dos pratos (nomes em shared/data.js)
 ProfilePictureUser/   fotografias de perfil (avatar dos utilizadores)

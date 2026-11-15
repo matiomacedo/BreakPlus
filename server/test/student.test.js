@@ -157,3 +157,77 @@ for (const [pickupKey, pickupTime] of [['2099-01-01', '<img src=x onerror=alert(
     assert.deepEqual([r.status, r.body.reason], [400, 'pickup']);
   });
 }
+
+/* ---------- Web Push ---------- */
+
+test('a chave pública VAPID está disponível para o browser subscrever', async () => {
+  const r = await call('/api/push/public-key');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.match(r.body.key, /^[A-Za-z0-9_-]{40,}$/);
+});
+
+test('subscrever e cancelar avisos exige sessão', async () => {
+  const sub = { endpoint: 'https://push.example/sub/1', keys: { p256dh: 'abc', auth: 'def' } };
+  const without = await call('/api/push/subscribe', { body: { subscription: sub } });
+  assert.equal(without.status, 401);
+  const cancel = await call('/api/push/unsubscribe', { body: { endpoint: sub.endpoint } });
+  assert.equal(cancel.status, 401);
+});
+
+test('a subscrição push fica guardada e é removida ao desligar os avisos', async () => {
+  const { PushSubscription } = require('../src/models');
+  const token = await login();
+  const subscription = { endpoint: 'https://push.example/sub/2', keys: { p256dh: 'p256dh-key', auth: 'auth-key' } };
+
+  const saved = await call('/api/push/subscribe', { token, body: { subscription } });
+  assert.equal(saved.body.ok, true);
+  assert.equal(await PushSubscription.countDocuments({ endpoint: subscription.endpoint }), 1);
+
+  // O mesmo endpoint noutra conta passa a pertencer a essa conta (sem duplicar).
+  const ana = await login('ana@demo.pt', 'demo1234', '4321');
+  await call('/api/push/subscribe', { token: ana, body: { subscription } });
+  assert.equal(await PushSubscription.countDocuments({ endpoint: subscription.endpoint }), 1);
+
+  const removed = await call('/api/push/unsubscribe', { token: ana, body: { endpoint: subscription.endpoint } });
+  assert.equal(removed.body.ok, true);
+  assert.equal(await PushSubscription.countDocuments({ endpoint: subscription.endpoint }), 0);
+});
+
+test('uma subscrição inválida é recusada', async () => {
+  const token = await login();
+  for (const subscription of [null, {}, { endpoint: 'http://inseguro.example', keys: { p256dh: 'a', auth: 'b' } }, { endpoint: 'https://x.example', keys: { p256dh: '', auth: 'b' } }]) {
+    const r = await call('/api/push/subscribe', { token, body: { subscription } });
+    assert.deepEqual([r.status, r.body.reason], [400, 'bad_subscription']);
+  }
+});
+
+test('o estado e o teste de Web Push contam os dispositivos subscritos', async () => {
+  const webpush = require('web-push');
+  const token = await login();
+
+  const before = await call('/api/push/status', { token });
+  assert.equal(before.body.subscriptions, 0);
+
+  const empty = await call('/api/push/test', { token, body: {} });
+  assert.equal(empty.body.ok, true);
+  assert.equal(empty.body.sent, 0);
+
+  await call('/api/push/subscribe', {
+    token,
+    body: { subscription: { endpoint: 'https://push.example/sub/test', keys: { p256dh: 'chave', auth: 'auth' } } },
+  });
+  const after = await call('/api/push/status', { token });
+  assert.equal(after.body.subscriptions, 1);
+
+  const sent = [];
+  const original = webpush.sendNotification;
+  webpush.sendNotification = async (_subscription, payload) => { sent.push(JSON.parse(payload)); return {}; };
+  try {
+    const test = await call('/api/push/test', { token, body: {} });
+    assert.equal(test.body.sent, 1);
+  } finally {
+    webpush.sendNotification = original;
+  }
+  assert.equal(sent[0].tag, 'bp-test-push');
+});

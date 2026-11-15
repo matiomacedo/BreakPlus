@@ -152,7 +152,12 @@ document.addEventListener('pointercancel', endDrag);
 
 // Sem login: o terminal abre logo na fila (a chave do terminal vai em cada pedido).
 (async () => {
-  await Store.start();
+  try {
+    await Store.start();
+  } finally {
+    const overlay = document.getElementById('boot');
+    if (overlay) overlay.hidden = true;
+  }
   Store.subscribe(render); render(); showTab('orders');
   setInterval(() => { tickTimes(); renderTopbar(); }, 15000);   // relógio e "Há N min"
 })();

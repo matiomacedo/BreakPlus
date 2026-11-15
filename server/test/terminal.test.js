@@ -157,3 +157,61 @@ test('não existe papel "staff" nos utilizadores', async () => {
   const { User } = require('../src/models');
   await assert.rejects(User.create({ name: 'X', role: 'staff', email: 'x@demo.pt', passwordHash: 'a', pinHash: 'b' }), /staff/);
 });
+
+/* ---------- Web Push ---------- */
+
+test('quando o pedido fica pronto o servidor envia Web Push ao aluno', async () => {
+  const webpush = require('web-push');
+  const token = await login();
+  const order = await placeNow(token, { 1: 1 });
+  await call('/api/push/subscribe', {
+    token,
+    body: { subscription: { endpoint: 'https://push.example/sub/ready', keys: { p256dh: 'chave', auth: 'auth' } } },
+  });
+
+  const sent = [];
+  const original = webpush.sendNotification;
+  webpush.sendNotification = async (subscription, payload) => {
+    sent.push({ subscription, payload: JSON.parse(payload) });
+    return {};
+  };
+
+  try {
+    await terminal(`/orders/${order.number}/status`, { body: { status: 'preparing' } });
+    await terminal(`/orders/${order.number}/status`, { body: { status: 'ready' } });
+    for (let i = 0; i < 40 && !sent.length; i++) await new Promise((r) => setTimeout(r, 25));
+  } finally {
+    webpush.sendNotification = original;
+  }
+
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].payload.title, new RegExp(`#${order.number}`));
+  assert.equal(sent[0].subscription.endpoint, 'https://push.example/sub/ready');
+});
+
+test('chamar a senha e anular também enviam Web Push', async () => {
+  const webpush = require('web-push');
+  const token = await login();
+  const order = await placeNow(token, { 1: 1 });
+  await call('/api/push/subscribe', {
+    token,
+    body: { subscription: { endpoint: 'https://push.example/sub/call', keys: { p256dh: 'chave', auth: 'auth' } } },
+  });
+
+  const sent = [];
+  const original = webpush.sendNotification;
+  webpush.sendNotification = async (_subscription, payload) => {
+    sent.push(JSON.parse(payload));
+    return {};
+  };
+
+  try {
+    await terminal(`/orders/${order.number}/notify`, { body: {} });
+    await terminal(`/orders/${order.number}/cancel`, { body: {} });
+    for (let i = 0; i < 40 && sent.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
+  } finally {
+    webpush.sendNotification = original;
+  }
+
+  assert.deepEqual(sent.map((p) => p.tag), [`bp-order-${order.number}-call`, `bp-order-${order.number}-cancel`]);
+});

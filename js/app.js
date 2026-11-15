@@ -1,3 +1,4 @@
+
 /* ==========================================================================
    app.js — o que acontece quando o utilizador toca em algo, e como a app
    reage ao que o terminal do bar faz (via js/store.js).
@@ -34,14 +35,20 @@ window.addEventListener('offline', updateConnectionBanner);
 window.addEventListener('online', () => {
   updateConnectionBanner();
   if (Auth.token()) Store.refresh();        // tenta recuperar os dados assim que houver rede
+  if (Auth.token()) Notifications.syncPush();
+});
+
+// A subscrição Web Push é renovada sempre que a app volta ao ecrã.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Auth.token()) Notifications.syncPush();
 });
 
 updateConnectionBanner();
 
-/** Notificação do sistema quando o aluno tem a app noutro separador. */
+/** Aviso do sistema: além do toast, aparece na central de notificações. */
 function notifySystem(title, body, tag) {
   if (!state.prefs.notifications) return;
-  Notifications.notifyIfAway(title, { body, tag });
+  Notifications.show(title, { body, tag });
 }
 
 /**
@@ -61,6 +68,8 @@ function armNotificationPermission() {
       if (result !== 'granted') {
         state.prefs.notifications = false;
         persistPrefs();
+      } else {
+        Notifications.syncPush();             // subscrição Web Push (app fechada)
       }
       if (state.view === 'more') renderMore();
     });
@@ -212,7 +221,12 @@ const ACTIONS = {
     if (d.key === 'notifications') {
       const hint = el.closest('.mrow')?.querySelector('small');
       if (hint) hint.textContent = Notifications.statusHint();
-      if (state.prefs.notifications) toast('Avisos do sistema ativados');
+      if (state.prefs.notifications) {
+        Notifications.syncPush();                // passa a receber avisos com a app fechada
+        toast('Avisos do sistema ativados');
+      } else {
+        Notifications.stopPush();
+      }
     }
   },
   'test-notification': async () => {
@@ -228,6 +242,28 @@ const ACTIONS = {
       tag: 'bp-test',
     });
     toast(shown ? 'Notificação de teste enviada' : 'Não foi possível mostrar a notificação');
+  },
+  'test-push': async () => {
+    if (!Notifications.supported()) return toast('Este dispositivo não suporta notificações');
+    const result = await Notifications.requestPermission();
+    if (result !== 'granted') {
+      return toast(result === 'denied'
+        ? 'Notificações bloqueadas nas definições do browser'
+        : 'Não foi possível ativar as notificações');
+    }
+    const subscribed = await Notifications.syncPush();
+    const r = await Auth.api('/api/push/test', {});
+    if (!r || !r.ok) {
+      return toast(r && r.reason === 'not_found'
+        ? 'A API ainda não tem o Web Push (falta atualizar o servidor no Render)'
+        : 'Não foi possível enviar o aviso pelo servidor');
+    }
+    if (!r.sent) {
+      return toast(subscribed
+        ? 'O servidor não encontrou nenhum dispositivo subscrito'
+        : 'Este dispositivo ainda não está subscrito. Tenta outra vez daqui a pouco');
+    }
+    toast(`Aviso enviado pelo servidor para ${r.sent} dispositivo${r.sent === 1 ? '' : 's'}`);
   },
   'install-pwa': async () => {
     const installed = await PWA.promptInstall();
@@ -351,6 +387,7 @@ Auth.start({
     renderAll(); primeStore(); Store.subscribe(onStoreChange);
     updateConnectionBanner();
     armNotificationPermission();
+    Notifications.syncPush();              // mantém a subscrição Web Push deste dispositivo
     setInterval(renderBarInfo, 30000);      // a fila e as horas das reservas mudam com o tempo
   },
 });
