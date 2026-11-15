@@ -1,11 +1,12 @@
 /* Rotas da app dos alunos/docentes (montadas em /api). Todas, exceto o login, pedem sessão completa. */
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { User, Product, Order, Transaction } = require('./models');
+const { User, Product, Order, Transaction, PushSubscription } = require('./models');
 const { verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
 const { r2, barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const push = require('./push');
 const { loadSharedData } = require('./shared-data');
 
 const { RESERVATION } = loadSharedData();     // mesmas regras que a app (shared/data.js)
@@ -64,6 +65,54 @@ function studentRouter() {
   }));
 
   r.get('/auth/me', auth, wrap(async (req, res) => res.json({ ok: true, user: publicUser(req.user) })));
+
+  /* ---------- Notificações Web Push (chegam com a app fechada) ---------- */
+
+  // Diagnóstico do deploy: permite confirmar qual commit está a correr no Render.
+  r.get('/version', (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null }));
+
+  r.get('/push/public-key', wrap(async (_req, res) => {
+    const key = await push.publicKey();
+    if (!key) throw fail('push_off', {}, 503);
+    res.json({ ok: true, key });
+  }));
+
+  // Guarda a subscrição deste dispositivo (endpoint + chaves do browser).
+  r.post('/push/subscribe', auth, wrap(async (req, res) => {
+    const sub = req.body && req.body.subscription;
+    const endpoint = sub && typeof sub.endpoint === 'string' ? sub.endpoint.trim() : '';
+    const p256dh = sub && sub.keys && typeof sub.keys.p256dh === 'string' ? sub.keys.p256dh : '';
+    const authKey = sub && sub.keys && typeof sub.keys.auth === 'string' ? sub.keys.auth : '';
+    if (!/^https:\/\/\S+$/i.test(endpoint) || endpoint.length > 1000 || !p256dh || !authKey) throw fail('bad_subscription');
+    await PushSubscription.updateOne(
+      { endpoint },
+      { $set: { user: req.user._id, keys: { p256dh, auth: authKey } } },
+      { upsert: true },
+    );
+    res.json({ ok: true });
+  }));
+
+  // Remove a subscrição deste dispositivo (avisos desligados ou conta terminada).
+  r.post('/push/unsubscribe', auth, wrap(async (req, res) => {
+    const endpoint = String((req.body && req.body.endpoint) || '');
+    if (endpoint) await PushSubscription.deleteOne({ endpoint, user: req.user._id });
+    res.json({ ok: true });
+  }));
+
+  // Diagnóstico: quantos dispositivos deste aluno estão subscritos.
+  r.get('/push/status', auth, wrap(async (req, res) => {
+    res.json({ ok: true, subscriptions: await PushSubscription.countDocuments({ user: req.user._id }) });
+  }));
+
+  // Teste real: o servidor envia o aviso (confirma o Web Push com a app fechada).
+  r.post('/push/test', auth, wrap(async (req, res) => {
+    const sent = await push.sendToUser(req.user._id, {
+      title: 'Break+ESTG · teste',
+      body: 'Se vês isto com a app fechada, o Web Push está a funcionar.',
+      tag: 'bp-test-push',
+    });
+    res.json({ ok: true, sent });
+  }));
 
   /* ---------- Dados ---------- */
 

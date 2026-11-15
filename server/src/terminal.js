@@ -5,6 +5,7 @@ const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
 const { barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const push = require('./push');
 
 const NEXT = { received: 'preparing', preparing: 'ready', ready: 'done' };
 
@@ -56,6 +57,14 @@ function terminalRouter({ terminalKey }) {
     if (status === 'ready') { o.readyAt = now; o.notifiedAt = now; } else if (status !== 'done') o.readyAt = undefined;
     if (status === 'done') o.doneAt = now;
     await o.save();
+    // Aviso imediato ao aluno (chega mesmo com a app fechada).
+    if (status === 'ready' && prev !== 'ready') {
+      push.notifyUser(o.user, {
+        title: `Pedido #${o.number} pronto!`,
+        body: 'Levanta no balcão e mostra a senha.',
+        tag: `bp-order-${o.number}-ready`,
+      });
+    }
     await o.populate('user', USER_FIELDS);
     res.json({ ok: true, order: terminalOrder(o) });
   }));
@@ -63,12 +72,24 @@ function terminalRouter({ terminalKey }) {
   r.post('/orders/:n/notify', wrap(async (req, res) => {
     const o = await Order.findOneAndUpdate({ number: +req.params.n }, { notifiedAt: Date.now() }, { new: true })
       .populate('user', USER_FIELDS);
+    if (o && o.status !== 'cancelled') {
+      push.notifyUser(o.user && o.user._id ? o.user._id : o.user, {
+        title: `Senha #${o.number} chamada`,
+        body: 'Dirige-te ao balcão do bar.',
+        tag: `bp-order-${o.number}-call`,
+      });
+    }
     res.json({ ok: !!o, order: o && terminalOrder(o) });
   }));
 
   // O bar pode anular qualquer pedido (mesmo entregue): reembolsa e repõe stock
   r.post('/orders/:n/cancel', wrap(async (req, res) => {
     const o = await cancelOrder(req.params.n, 'staff');
+    push.notifyUser(o.user, {
+      title: `Pedido #${o.number} cancelado`,
+      body: 'O valor foi devolvido ao teu saldo.',
+      tag: `bp-order-${o.number}-cancel`,
+    });
     await o.populate('user', USER_FIELDS);
     res.json({ ok: true, order: terminalOrder(o) });
   }));
