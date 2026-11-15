@@ -252,14 +252,18 @@ const ACTIONS = {
         : 'Não foi possível ativar as notificações');
     }
     const subscribed = await Notifications.syncPush();
-    if (!subscribed) return toast('Este dispositivo ainda não está subscrito. Tenta outra vez daqui a pouco');
     const r = await Auth.api('/api/push/test', {});
-    if (!r || !r.ok) return toast(r && r.reason === 'not_found'
-      ? 'A API ainda não tem o Web Push (falta atualizar o servidor)'
-      : 'Não foi possível enviar o aviso pelo servidor');
-    toast(r.sent
-      ? `Aviso enviado pelo servidor para ${r.sent} dispositivo${r.sent === 1 ? '' : 's'}`
-      : 'O servidor não encontrou nenhum dispositivo subscrito');
+    if (!r || !r.ok) {
+      return toast(r && r.reason === 'not_found'
+        ? 'A API ainda não tem o Web Push (falta atualizar o servidor no Render)'
+        : 'Não foi possível enviar o aviso pelo servidor');
+    }
+    if (!r.sent) {
+      return toast(subscribed
+        ? 'O servidor não encontrou nenhum dispositivo subscrito'
+        : 'Este dispositivo ainda não está subscrito. Tenta outra vez daqui a pouco');
+    }
+    toast(`Aviso enviado pelo servidor para ${r.sent} dispositivo${r.sent === 1 ? '' : 's'}`);
   },
   'install-pwa': async () => {
     const installed = await PWA.promptInstall();
