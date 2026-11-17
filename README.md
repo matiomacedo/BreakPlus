@@ -83,7 +83,14 @@ No MongoDB Atlas, **Network Access** tem de permitir o Render. No plano free os 
 
 ### 2. Frontend na Vercel
 
-O projeto da Vercel deve estar ligado **diretamente a este repositório** (`matiomacedo/BreakPlus`), com a produção na branch `main`. Assim cada `git push` publica o frontend sem copiar pastas nem manter um repositório espelho. Se a Vercel não listar o repositório, instala a GitHub App da Vercel na conta dona (ou pede acesso de administrador).
+O projeto da Vercel está ligado a **`goncalobrito/breakplus_mine`**, um espelho deste repositório (a conta da Vercel não tem acesso ao `matiomacedo/BreakPlus`). O clone local empurra para os dois com um só `git push`, porque o `origin` tem dois push URLs. Num clone novo, configura assim:
+
+```bash
+git remote set-url --add --push origin https://github.com/matiomacedo/BreakPlus.git
+git remote set-url --add --push origin https://github.com/goncalobrito/breakplus_mine.git
+```
+
+Não é preciso copiar pastas: o Render segue o `matiomacedo/BreakPlus` e a Vercel o espelho, ambos no mesmo commit.
 
 O `vercel.json` já define o build (`node scripts/build-config.js`) e a pasta publicada (`dist/`). Em **Settings → Environment Variables** define:
 
