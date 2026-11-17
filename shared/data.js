@@ -34,6 +34,8 @@ const PERIODS    = ['Todos', 'Destaques', 'Almoço', 'Jantar', 'Bar'];
 const ITEMS = [
   {
     id: 1,
+    complexity: 4,            // 1–5: usado pela fila com prioridade justa (shared/queue.js)
+    prepMin: 4,               // minutos estimados de preparação
     image: 'images/tosta-mista-pão-rustico.png',
     category: 'Tostas & Snacks',
     subtitle: 'Tostas especiais',
@@ -48,6 +50,8 @@ const ITEMS = [
   },
   {
     id: 2,
+    complexity: 2,
+    prepMin: 2,
     image: 'images/croissant-misto.png',
     category: 'Pastelaria',
     subtitle: 'Pastelaria salgada',
@@ -62,6 +66,8 @@ const ITEMS = [
   },
   {
     id: 3,
+    complexity: 1,
+    prepMin: 1,
     image: 'images/donut-glaze-chocolate.png',
     category: 'Pastelaria',
     subtitle: 'Pastelaria doce',
@@ -75,6 +81,8 @@ const ITEMS = [
   },
   {
     id: 4,
+    complexity: 3,
+    prepMin: 3,
     image: 'images/sumo-laranja-natural.png',
     category: 'Bebidas',
     subtitle: 'Sumos & vitaminas',
@@ -90,6 +98,8 @@ const ITEMS = [
   },
   {
     id: 5,
+    complexity: 1,
+    prepMin: 1,
     image: 'images/frize.png',
     category: 'Bebidas',
     subtitle: 'Bebidas frescas',
@@ -103,6 +113,8 @@ const ITEMS = [
   },
   {
     id: 6,
+    complexity: 2,
+    prepMin: 2,
     image: 'images/cafe-nata.png',
     category: 'Pastelaria',
     subtitle: 'Menu pequeno-almoço / lanche',

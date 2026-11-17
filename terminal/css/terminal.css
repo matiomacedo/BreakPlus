@@ -147,6 +147,9 @@ h2 { font-size: 17px; line-height: 22px; letter-spacing: -.01em; font-weight: 80
 .pill.state.st-ok { background: var(--mint); color: var(--mintt); }
 .pill.state.st-low { background: var(--warn); color: var(--warnt); }
 .pill.state.st-out { background: var(--danger); color: #fff; }
+.pill.prio { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+.prio-note { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; color: var(--mut); font-size: 12px; line-height: 17px; }
+.prio-note .ic { width: 14px; height: 14px; margin-top: 1px; color: var(--brand); }
 
 .role { margin-left: 8px; padding: 2px 9px; border-radius: 99px; background: var(--chip); color: var(--chipt); font-size: 11px; font-weight: 700; letter-spacing: .04em; vertical-align: 2px; }
 

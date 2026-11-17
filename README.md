@@ -117,6 +117,25 @@ Em desenvolvimento local nada disto é preciso: continua a usar `terminal/config
 
 A interface usa transições suaves em botões, chips, cartões e painéis (entrada em cascata, brilho ao pairar, resposta ao toque). Com **movimento reduzido** ativo no sistema, as animações são desligadas automaticamente.
 
+## Fila com prioridade justa (terminal)
+
+Os pedidos `received` já não aparecem por ordem de chegada. O terminal usa `shared/queue.js` para decidir qual se começa a preparar a seguir, equilibrando três objetivos:
+
+- **Equidade:** a espera sobe de forma agressiva. A partir de **12 min** há um salto fixo (limite anti-inanição), por isso nenhum pedido fica eternamente atrás de pedidos mais simples.
+- **Complexidade:** fora de horas de ponta, os pedidos que demoram mais começam mais cedo; em **hora de ponta** (12:00–14:30 e 17:30–19:15) os itens rápidos ganham prioridade para escoar a fila.
+- **Quantidade e agrupamento:** pedidos grandes levam uma penalização que desaparece ao fim de ~7 min de espera. Pedidos com o mesmo produto dominante ganham um bónus e, quando a diferença de prioridade é pequena (≤ 12 pontos), ficam **lado a lado** para o balcão preparar em série. O agrupamento nunca passa à frente de um pedido com prioridade claramente maior.
+
+Os pedidos `preparing` e `ready` ficam nas suas faixas (já estão a ser tratados / à espera de entrega); a prioridade decide sobretudo a ordem dos `received`. Cada cartão mostra `N.º a preparar` e o motivo resumido (espera, limite anti-inanição, agrupamento, hora de ponta).
+
+O motor também pode ser chamado com o formato genérico:
+
+```js
+QueueEngine.sort({ current_time: Date.now(), orders, items: ITEMS, context: 'peak_rush' });
+// -> { sorted_queue: [{ order_id, position, reasoning, priority_score }], context, diagnostics }
+```
+
+As constantes de afinação estão em `QueueEngine.TUNING`. Testes: `node --test server/test/queue.test.js`.
+
 ## App instalável (PWA)
 
 A app dos alunos pode ser instalada no ecrã principal e abre em ecrã completo (`display: standalone`).
@@ -187,7 +206,8 @@ terminal/index.html   app do terminal
 terminal/js/          store.js (chave do terminal + ações do balcão), ui.js, app.js
 terminal/css/         estilos do terminal
 shared/
-  data.js             pratos, bar e regras das reservas (o servidor também lê este ficheiro)
+  data.js             pratos (com complexidade/tempo), bar e regras das reservas (o servidor também lê este ficheiro)
+  queue.js            fila com prioridade justa: espera, complexidade, quantidade e agrupamento
   util.js             funções puras (formatação, datas, totais)
   api.js              requestJson() + createStore(): estado do servidor, atualizado de 2,5 em 2,5 s
   tokens.css          cores e sombras comuns às duas apps
