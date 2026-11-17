@@ -74,6 +74,35 @@ const linesHTML = (items) => Object.entries(items).map(([id, qty]) => {
 }).join('');
 
 /* ==========================================================================
+   Fila com prioridade justa (shared/queue.js)
+
+   - "ready" e "preparing" ficam nas suas faixas: já estão a ser tratados e
+     não faz sentido mandá-los para trás. A prioridade decide, acima de tudo,
+     qual dos pedidos "received" se começa a preparar a seguir.
+   - A ordem é recalculada a cada atualização da Store (não a cada segundo),
+     por isso os cartões não saltam enquanto se trabalha.
+   ========================================================================== */
+
+function productionQueue() {
+  const all = Store.queue();
+  const byArrival = (a, b) => (a.queuedAt || 0) - (b.queuedAt || 0);
+  const ready = all.filter((o) => o.status === 'ready')
+    .sort((a, b) => (a.readyAt || 0) - (b.readyAt || 0) || byArrival(a, b));
+  const preparing = all.filter((o) => o.status === 'preparing').sort(byArrival);
+  const received = all.filter((o) => o.status === 'received');
+
+  const ranked = typeof QueueEngine !== 'undefined'
+    ? QueueEngine.rankOrders(received, { items: ITEMS, currentTime: Date.now() })
+    : received.sort(byArrival).map((order, index) => ({ order, position: index + 1, reasoning: '' }));
+
+  return [
+    ...ready.map((order) => ({ order, rank: null })),
+    ...preparing.map((order) => ({ order, rank: null })),
+    ...ranked.map((row) => ({ order: row.order, rank: row })),
+  ];
+}
+
+/* ==========================================================================
    Barra de topo
    ========================================================================== */
 
@@ -136,7 +165,7 @@ const SPEED_HINT = {
   ready: 'Cliente a caminho do balcão',
 };
 
-function orderCardHTML(o) {
+function orderCardHTML(o, rank = null) {
   const step = STEPS.indexOf(o.status);
   const isNew = !ui.first && !ui.known.has(o.number);
   const changedStatus = ui.lastStatus[o.number] && ui.lastStatus[o.number] !== o.status;
@@ -145,6 +174,12 @@ function orderCardHTML(o) {
     ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
     : 'Enviado da App Campus · Saldo pago';
   const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '● ' : ''}${STEP_LABEL[s]}</span>`).join('');
+  const priority = rank && rank.position
+    ? `<span class="pill prio" title="${escapeHtml(rank.reasoning)}">${icon('zap', 'sm')}<span>${rank.position}.º a preparar</span></span>`
+    : '';
+  const reason = rank && rank.reasoning
+    ? `<div class="prio-note" title="${escapeHtml(rank.reasoning)}">${icon('zap', 'sm')}<span>${escapeHtml(rank.reasoning)}</span></div>`
+    : '';
 
   return `
   <article class="order s-${escapeHtml(o.status)} ${isNew ? 'rise' : ''} ${changedStatus ? 'flash' : ''}" data-number="${escapeHtml(o.number)}">
@@ -154,9 +189,11 @@ function orderCardHTML(o) {
         <div>
           <div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div>
           <div class="origin">${origin}</div>
+          ${reason}
         </div>
       </div>
       <div class="pills">
+        ${priority}
         ${o.status === 'ready'
           ? `<span class="pill ok" data-since="${escapeHtml(o.readyAt)}" data-late="0">${icon('check', 'sm')}<span>${sinceText(o.readyAt)}</span></span>`
           : `<span class="pill" data-since="${escapeHtml(o.queuedAt)}" data-late="1">${icon('clock', 'sm')}<span>${sinceText(o.queuedAt)}</span></span>`}
@@ -199,10 +236,36 @@ function historyItemHTML(o) {
     </div>`;
 }
 
+/**
+ * Atualiza a prioridade sem redesenhar os cartões: só troca a ordem quando ela
+ * muda de facto (a espera faz um pedido subir) e atualiza os motivos em sítio.
+ * Assim os cartões não piscam a cada 15 s e um arrasto não é interrompido.
+ */
+function refreshQueuePriority() {
+  if (ui.dragging) return;
+  const next = productionQueue();
+  const current = $$('#queue .order').map((card) => +card.dataset.number);
+  const numbers = next.map(({ order }) => order.number);
+  const sameOrder = current.length === numbers.length && current.every((n, i) => n === numbers[i]);
+  if (!sameOrder) { renderOrders(); return; }
+
+  next.forEach(({ order, rank }) => {
+    if (!rank) return;
+    const card = $(`#queue .order[data-number="${order.number}"]`);
+    if (!card) return;
+    const pill = card.querySelector('.pill.prio');
+    const label = pill && pill.querySelector('span');
+    if (pill) pill.title = rank.reasoning;
+    if (label) label.textContent = `${rank.position}.º a preparar`;
+    const note = card.querySelector('.prio-note span');
+    if (note) note.textContent = rank.reasoning;
+  });
+}
+
 function renderOrders() {
-  const queue = Store.queue();
+  const queue = productionQueue();
   $('#queue').innerHTML = queue.length
-    ? queue.map(orderCardHTML).join('')
+    ? queue.map(({ order, rank }) => orderCardHTML(order, rank)).join('')
     : emptyHTML('Sem pedidos na fila', 'Quando um aluno pedir na app, aparece aqui automaticamente.');
 
   const history = Store.history(5);

@@ -159,5 +159,6 @@ document.addEventListener('pointercancel', endDrag);
     if (overlay) overlay.hidden = true;
   }
   Store.subscribe(render); render(); showTab('orders');
-  setInterval(() => { tickTimes(); renderTopbar(); }, 15000);   // relógio e "Há N min"
+  // Relógio, "Há N min" e prioridade (a espera muda a ordem sem novos pedidos).
+  setInterval(() => { tickTimes(); renderTopbar(); refreshQueuePriority(); }, 15000);
 })();
