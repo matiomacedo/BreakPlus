@@ -83,6 +83,8 @@ No MongoDB Atlas, **Network Access** tem de permitir o Render. No plano free os 
 
 ### 2. Frontend na Vercel
 
+O projeto da Vercel deve estar ligado **diretamente a este repositório** (`matiomacedo/BreakPlus`), com a produção na branch `main`. Assim cada `git push` publica o frontend sem copiar pastas nem manter um repositório espelho. Se a Vercel não listar o repositório, instala a GitHub App da Vercel na conta dona (ou pede acesso de administrador).
+
 O `vercel.json` já define o build (`node scripts/build-config.js`) e a pasta publicada (`dist/`). Em **Settings → Environment Variables** define:
 
 | Nome | Valor |
