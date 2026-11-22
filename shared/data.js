@@ -19,6 +19,7 @@ const RESERVATION = {
   minLeadMin: 30,         // antecedência mínima para reservar (só afeta "hoje")
   cancelBeforeMin: 30,    // até quanto tempo antes se pode cancelar com reembolso
   todayUntil: '18:00',    // no dia atual, a última hora de levantamento é 18:00
+  slotCapacity: 10,       // máximo de reservas por hora de levantamento (o servidor recusa as seguintes)
 };
 
 const CATEGORIES = ['Todos', 'Tostas & Snacks', 'Pastelaria', 'Bebidas'];

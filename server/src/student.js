@@ -1,7 +1,7 @@
 /* Rotas da app dos alunos/docentes (montadas em /api). Todas, exceto o login, pedem sessão completa. */
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { User, Product, Order, Transaction, PushSubscription } = require('./models');
+const { User, Product, Order, Transaction, PushSubscription, Slot } = require('./models');
 const { verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
@@ -29,6 +29,20 @@ function pickupAtFor(pickupKey, pickupTime, now = clock.now()) {
   if (m < open || m > toMinutes(RESERVATION.todayUntil) || (m - open) % RESERVATION.stepMin) return null;
   const at = lisbonEpoch(pickupKey, pickupTime);
   return at - now < RESERVATION.minLeadMin * 60000 ? null : at;
+}
+
+/** Horas de hoje (Lisboa) que já atingiram RESERVATION.slotCapacity: { key, full: ['12:30', ...] }. */
+async function slotsToday() {
+  const key = lisbonDateKey();
+  const full = await Slot.find({ key, count: { $gte: RESERVATION.slotCapacity } }).sort('time').select('time');
+  return { key, full: full.map((s) => s.time) };
+}
+
+/** Ocupa um lugar na hora pedida, dentro da transação do pedido. Hora cheia → recusa. */
+async function takeSlot(key, time, session) {
+  await Slot.updateOne({ key, time }, { $setOnInsert: { count: 0 } }, { upsert: true, session });
+  const slot = await Slot.findOneAndUpdate({ key, time, count: { $lt: RESERVATION.slotCapacity } }, { $inc: { count: 1 } }, { session, new: true });
+  if (!slot) throw fail('slot_full', {}, 409);
 }
 
 /** { "1": 2 } → { 1: 2 } com ids e quantidades inteiros positivos (senão recusa). */
@@ -126,19 +140,22 @@ function studentRouter() {
 
   // Estado da app: só os pedidos e a carteira de quem tem sessão + fila global (tempo de espera) + "Mais pedido"
   r.get('/state', auth, wrap(async (req, res) => {
-    const [products, set, orders, txs, stats, popular] = await Promise.all([
+    const [products, set, orders, txs, stats, popular, slots] = await Promise.all([
       Product.find(), barSettings(),
       Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       Transaction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50),
-      queueStats(), popularItems(),
+      queueStats(), popularItems(), slotsToday(),
     ]);
     res.json({
       stock: Object.fromEntries(products.map((p) => [p.itemId, p.stock])),
-      paused: set.paused, ...stats, popular,
+      paused: set.paused, ...stats, popular, slots,
       wallet: { balance: req.user.balance, transactions: txs },
       orders: orders.map((o) => orderOut(o, req.user._id)),
     });
   }));
+
+  // Ocupação das horas de reserva de hoje (as reservas são só para o dia atual)
+  r.get('/slots', auth, wrap(async (_req, res) => res.json({ ok: true, ...(await slotsToday()) })));
 
   r.get('/menu', auth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
   r.get('/orders/mine', auth, wrap(async (req, res) => {
@@ -161,6 +178,7 @@ function studentRouter() {
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');
+      if (reservation) await takeSlot(pickupKey, pickupTime, session);
       let total = 0;
       for (const [id, qty] of Object.entries(items)) {
         const p = await Product.findOneAndUpdate({ itemId: +id, stock: { $gte: qty } }, { $inc: { stock: -qty } }, { session, new: true });
@@ -185,6 +203,7 @@ function studentRouter() {
       return order;
     });
     realtime.orderChanged(req.user._id);
+    if (reservation) realtime.barChanged('slots');          // a ocupação das horas mudou para todos
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 
@@ -195,6 +214,7 @@ function studentRouter() {
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
     realtime.orderChanged(req.user._id);
+    realtime.barChanged('slots');
     await out.populate('user', USER_FIELDS);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
@@ -211,4 +231,4 @@ function studentRouter() {
   return r;
 }
 
-module.exports = { studentRouter, pickupAtFor };
+module.exports = { studentRouter, pickupAtFor, RESERVATION };

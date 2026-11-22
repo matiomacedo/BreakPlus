@@ -1,6 +1,6 @@
 /* Regras de pedidos partilhadas pela app dos alunos e pelo terminal. */
 const mongoose = require('mongoose');
-const { Product, Order, User, Transaction, Setting } = require('./models');
+const { Product, Order, User, Transaction, Setting, Slot } = require('./models');
 const { inTx } = require('./db');
 const { fail } = require('./http');
 
@@ -61,6 +61,9 @@ const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session)
   if (!o || o.status === 'cancelled') throw fail('not_found', {}, 404);
   check(o);
   for (const [id, qty] of Object.entries(o.items)) await Product.updateOne({ itemId: +id }, { $inc: { stock: qty } }, { session });
+  if (o.type === 'reservation') {                            // liberta o lugar na hora de levantamento
+    await Slot.updateOne({ key: o.pickupKey, time: o.pickupTime, count: { $gt: 0 } }, { $inc: { count: -1 } }, { session });
+  }
   await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
   await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number, ticket: o.ticket }], { session });
   o.status = 'cancelled'; o.cancelledBy = by; o.cancelledByName = name; o.cancelledAt = Date.now();

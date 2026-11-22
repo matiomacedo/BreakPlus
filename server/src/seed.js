@@ -1,13 +1,13 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { User, Product, Order, Transaction, Setting } = require('./models');
+const { User, Product, Order, Transaction, Setting, Slot } = require('./models');
 const { hash } = require('./auth');
 const { loadSharedData } = require('./shared-data');
 
 (async () => {
   await mongoose.connect(process.env.MONGODB_URI);
   const { ITEMS } = loadSharedData();
-  await Promise.all([User, Product, Order, Transaction, Setting].map((m) => m.deleteMany({})));
+  await Promise.all([User, Product, Order, Transaction, Setting, Slot].map((m) => m.deleteMany({})));
   await Product.insertMany(ITEMS.map((i) => ({
     itemId: i.id, name: i.name, price: i.price, category: i.category,
     periods: i.periods, photo: i.image || '', stock: i.stock ?? 20,

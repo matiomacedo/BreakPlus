@@ -53,6 +53,11 @@ const PushSubscription = model('PushSubscription', new Schema({
   createdAt: { type: Date, default: Date.now },
 }));
 
+// Ocupação de cada hora de levantamento (reservas ativas). O índice único evita duas contagens para a mesma hora.
+const SlotSchema = new Schema({ key: String, time: String, count: { type: Number, default: 0 } });
+SlotSchema.index({ key: 1, time: 1 }, { unique: true });
+const Slot = model('Slot', SlotSchema);
+
 // Estado global do bar (pausa) + contador de pedidos + senha do dia + chaves VAPID (geradas uma vez)
 const Setting = model('Setting', new Schema({
   _id: String, paused: { type: Boolean, default: false }, lastNumber: { type: Number, default: 100 },
@@ -60,4 +65,4 @@ const Setting = model('Setting', new Schema({
   vapidPublicKey: String, vapidPrivateKey: String,
 }));
 
-module.exports = { User, Product, Order, Transaction, PushSubscription, Setting };
+module.exports = { User, Product, Order, Transaction, PushSubscription, Setting, Slot };
