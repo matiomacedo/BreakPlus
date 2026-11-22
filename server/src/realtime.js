@@ -1,7 +1,9 @@
 /* Tempo real (Socket.IO): avisa as apps de que o estado mudou, para não esperarem pelo polling.
    - Alunos/docentes ligam-se com o token de sessão → sala "user:<id>" (só os seus pedidos/saldo).
    - As funcionárias (papel "staff") ligam-se com o token delas → sala "terminal" (todos os pedidos).
-   Os eventos não levam dados: cada app volta a pedir o seu /state, que já filtra o que pode ver. */
+   Os eventos não levam dados: cada app volta a pedir o seu /state, que já filtra o que pode ver.
+   Um pedido novo/alterado/cancelado muda o stock, a fila e o "Mais pedido" de todos: o dono e o terminal
+   recebem "order", os outros só "queue" (sem saberem de quem é o pedido). */
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const { SECRET } = require('./auth');
@@ -27,8 +29,13 @@ function attach(httpServer, { corsOrigins }) {
 
 const emit = (rooms, type) => { if (io) io.to(rooms).emit('changed', { type }); };
 
-/** Pedido novo/alterado: o dono e o terminal. */
-const orderChanged = (userId, type = 'order') => emit([`user:${userId && userId._id ? userId._id : userId}`, 'terminal'], type);
+/** Pedido novo/alterado: "order" ao dono e ao terminal; `shared` (stock/fila mudaram) → "queue" aos outros. */
+function orderChanged(userId, { shared = true } = {}) {
+  if (!io) return;
+  const rooms = [`user:${userId && userId._id ? userId._id : userId}`, 'terminal'];
+  io.to(rooms).emit('changed', { type: 'order' });
+  if (shared) io.except(rooms).emit('changed', { type: 'queue' });
+}
 /** Só o aluno (ex.: carregamento de saldo). */
 const userChanged = (userId, type) => emit(`user:${userId}`, type);
 /** Toda a gente (stock, pausa). */

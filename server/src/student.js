@@ -1,11 +1,12 @@
-/* Rotas da app dos alunos/docentes (montadas em /api). Todas, exceto o login, pedem sessão completa. */
+/* Rotas da app dos alunos/docentes (montadas em /api). Todas, exceto o login, pedem sessão completa
+   de um aluno/docente; /auth/me serve qualquer papel (o terminal também valida a sessão aqui). */
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { User, Product, Order, Transaction, PushSubscription, Slot } = require('./models');
-const { verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
+const { verify, sign, auth, studentAuth, takeAttempt, failAttempt, lockMinutes, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
-const { r2, barSettings, queueStats, popularItems, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const { r2, barSettings, queueStats, popularItems, clearPopularCache, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
 const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
@@ -19,17 +20,22 @@ const orderOut = (o, uid) => {
 };
 
 /**
- * Hora de levantamento (ms) calculada no servidor, em Europe/Lisbon (o `pickupAt` do cliente é ignorado).
- * null se não for hoje, se estiver fora de BAR.open–RESERVATION.todayUntil, fora da grelha de
- * RESERVATION.stepMin ou com menos de RESERVATION.minLeadMin de antecedência.
+ * Porque é que a hora de levantamento não serve (Europe/Lisbon), ou null se servir:
+ * 'pickup' se não for hoje, se estiver fora de BAR.open–RESERVATION.todayUntil ou da grelha de RESERVATION.stepMin;
+ * 'lead' se tiver menos de RESERVATION.minLeadMin de antecedência. A antecedência conta-se em minutos
+ * inteiros, como a app ao mostrar as horas (às 12:00:40 a hora 12:30 ainda é válida).
  */
-function pickupAtFor(pickupKey, pickupTime, now = clock.now()) {
-  if (pickupKey !== lisbonDateKey(now)) return null;
+function pickupError(pickupKey, pickupTime, now = clock.now()) {
+  if (pickupKey !== lisbonDateKey(now)) return 'pickup';
   const m = toMinutes(pickupTime), open = toMinutes(BAR.open);
-  if (m < open || m > toMinutes(RESERVATION.todayUntil) || (m - open) % RESERVATION.stepMin) return null;
-  const at = lisbonEpoch(pickupKey, pickupTime);
-  return at - now < RESERVATION.minLeadMin * 60000 ? null : at;
+  if (m < open || m > toMinutes(RESERVATION.todayUntil) || (m - open) % RESERVATION.stepMin) return 'pickup';
+  const minuteNow = Math.floor(now / 60000) * 60000;
+  return lisbonEpoch(pickupKey, pickupTime) - minuteNow < RESERVATION.minLeadMin * 60000 ? 'lead' : null;
 }
+
+/** Hora de levantamento (ms) calculada no servidor (o `pickupAt` do cliente é ignorado); null se não servir. */
+const pickupAtFor = (pickupKey, pickupTime, now = clock.now()) =>
+  (pickupError(pickupKey, pickupTime, now) ? null : lisbonEpoch(pickupKey, pickupTime));
 
 /** Horas de hoje (Lisboa) que já atingiram RESERVATION.slotCapacity: { key, full: ['12:30', ...] }. */
 async function slotsToday() {
@@ -38,9 +44,16 @@ async function slotsToday() {
   return { key, full: full.map((s) => s.time) };
 }
 
+/** Garante que o contador da hora existe, FORA da transação: duas primeiras reservas em paralelo para a mesma
+    hora não podem chocar no índice único dentro da transação (E11000 não é repetido sozinho → erro 500). */
+async function ensureSlot(key, time) {
+  try { await Slot.updateOne({ key, time }, { $setOnInsert: { count: 0 } }, { upsert: true }); } catch (e) {
+    if (e.code !== 11000) throw e;                         // outro pedido criou-o ao mesmo tempo: já existe
+  }
+}
+
 /** Ocupa um lugar na hora pedida, dentro da transação do pedido. Hora cheia → recusa. */
 async function takeSlot(key, time, session) {
-  await Slot.updateOne({ key, time }, { $setOnInsert: { count: 0 } }, { upsert: true, session });
   const slot = await Slot.findOneAndUpdate({ key, time, count: { $lt: RESERVATION.slotCapacity } }, { $inc: { count: 1 } }, { session, new: true });
   if (!slot) throw fail('slot_full', {}, 409);
 }
@@ -62,27 +75,31 @@ function studentRouter() {
 
   r.post('/auth/login', wrap(async (req, res) => {
     const email = String(req.body.email || '').toLowerCase().trim();
-    const u = await User.findOne({ email }).select('+passwordHash +failCount +lockUntil');
+    const u = await User.findOne({ email }).select('+passwordHash');
     if (!u) throw fail('credentials', {}, 401);                        // mesma resposta: não revela se o email existe
-    const lock = lockedMin(u);
-    if (lock) throw fail('locked', { minutes: lock }, 429);
-    if (!verify(req.body.password, u.passwordHash)) { await registerFail(u); throw fail('credentials', {}, 401); }
+    const attempt = await takeAttempt(u._id);
+    if (!attempt) throw fail('locked', { minutes: await lockMinutes(u._id) }, 429);
+    if (!verify(req.body.password, u.passwordHash)) {
+      const minutes = await failAttempt(attempt);
+      if (minutes) throw fail('locked', { minutes }, 429);
+      throw fail('credentials', {}, 401);
+    }
+    await User.updateOne({ _id: u._id, failCount: { $gt: 0 } }, { $inc: { failCount: -1 } });   // password certa: devolve a tentativa
     res.json({ ok: true, preToken: sign(u, 'pin'), name: u.name });
   }));
 
   r.post('/auth/pin', wrap(async (req, res) => {
     let t; try { t = jwt.verify(req.body.preToken, SECRET); if (t.scope !== 'pin') throw 0; } catch { throw fail('expired', {}, 401); }
-    const u = await User.findById(t.sub).select('+pinHash +failCount +lockUntil');
+    const u = await User.findById(t.sub).select('+pinHash');
     if (!u) throw fail('expired', {}, 401);
-    const lock = lockedMin(u);
-    if (lock) throw fail('locked', { minutes: lock }, 429);
+    const attempt = await takeAttempt(u._id);
+    if (!attempt) throw fail('locked', { minutes: await lockMinutes(u._id) }, 429);
     if (!/^\d{4}$/.test(String(req.body.pin)) || !verify(req.body.pin, u.pinHash)) {
-      await registerFail(u);
-      const minutes = lockedMin(u);
+      const minutes = await failAttempt(attempt);
       if (minutes) throw fail('locked', { minutes }, 429);
-      throw fail('pin', { attemptsLeft: MAX_FAILS - u.failCount }, 401);
+      throw fail('pin', { attemptsLeft: MAX_FAILS - attempt.failCount }, 401);
     }
-    u.failCount = 0; u.lockUntil = null; await u.save();
+    await User.updateOne({ _id: u._id }, { failCount: 0, lockUntil: null });
     res.json({ ok: true, token: sign(u, 'full'), user: publicUser(u) });
   }));
 
@@ -100,7 +117,7 @@ function studentRouter() {
   }));
 
   // Guarda a subscrição deste dispositivo (endpoint + chaves do browser).
-  r.post('/push/subscribe', auth, wrap(async (req, res) => {
+  r.post('/push/subscribe', studentAuth, wrap(async (req, res) => {
     const sub = req.body && req.body.subscription;
     const endpoint = sub && typeof sub.endpoint === 'string' ? sub.endpoint.trim() : '';
     const p256dh = sub && sub.keys && typeof sub.keys.p256dh === 'string' ? sub.keys.p256dh : '';
@@ -115,19 +132,19 @@ function studentRouter() {
   }));
 
   // Remove a subscrição deste dispositivo (avisos desligados ou conta terminada).
-  r.post('/push/unsubscribe', auth, wrap(async (req, res) => {
+  r.post('/push/unsubscribe', studentAuth, wrap(async (req, res) => {
     const endpoint = String((req.body && req.body.endpoint) || '');
     if (endpoint) await PushSubscription.deleteOne({ endpoint, user: req.user._id });
     res.json({ ok: true });
   }));
 
   // Diagnóstico: quantos dispositivos deste aluno estão subscritos.
-  r.get('/push/status', auth, wrap(async (req, res) => {
+  r.get('/push/status', studentAuth, wrap(async (req, res) => {
     res.json({ ok: true, subscriptions: await PushSubscription.countDocuments({ user: req.user._id }) });
   }));
 
   // Teste real: o servidor envia o aviso (confirma o Web Push com a app fechada).
-  r.post('/push/test', auth, wrap(async (req, res) => {
+  r.post('/push/test', studentAuth, wrap(async (req, res) => {
     const sent = await push.sendToUser(req.user._id, {
       title: 'Break+ESTG · teste',
       body: 'Se vês isto com a app fechada, o Web Push está a funcionar.',
@@ -139,7 +156,7 @@ function studentRouter() {
   /* ---------- Dados ---------- */
 
   // Estado da app: só os pedidos e a carteira de quem tem sessão + fila global (tempo de espera) + "Mais pedido"
-  r.get('/state', auth, wrap(async (req, res) => {
+  r.get('/state', studentAuth, wrap(async (req, res) => {
     const [products, set, orders, txs, stats, popular, slots] = await Promise.all([
       Product.find(), barSettings(),
       Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
@@ -155,17 +172,17 @@ function studentRouter() {
   }));
 
   // Ocupação das horas de reserva de hoje (as reservas são só para o dia atual)
-  r.get('/slots', auth, wrap(async (_req, res) => res.json({ ok: true, ...(await slotsToday()) })));
+  r.get('/slots', studentAuth, wrap(async (_req, res) => res.json({ ok: true, ...(await slotsToday()) })));
 
-  r.get('/menu', auth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
-  r.get('/orders/mine', auth, wrap(async (req, res) => {
+  r.get('/menu', studentAuth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
+  r.get('/orders/mine', studentAuth, wrap(async (req, res) => {
     const orders = await Order.find({ user: req.user._id }).sort({ number: -1 }).populate('user', USER_FIELDS);
     res.json(orders.map((o) => orderOut(o, req.user._id)));
   }));
 
   /* ---------- Pedidos ---------- */
 
-  r.post('/orders', auth, wrap(async (req, res) => {
+  r.post('/orders', studentAuth, wrap(async (req, res) => {
     const { type, pickupKey, pickupTime } = req.body;
     if (!['now', 'reservation'].includes(type)) throw fail('type');
     const items = parseItems(req.body.items);
@@ -173,8 +190,10 @@ function studentRouter() {
     // Dia e hora vão parar ao ecrã do terminal: só se aceita o formato exato ("2026-11-05", "12:30")
     if (reservation && !(/^\d{4}-\d{2}-\d{2}$/.test(pickupKey) && /^([01]\d|2[0-3]):[0-5]\d$/.test(pickupTime))) throw fail('pickup');
     // Só se reserva para hoje, na grelha do bar e até às 18:00 (mesmas regras que a app mostra em shared/data.js)
-    const pickupAt = reservation ? pickupAtFor(pickupKey, pickupTime) : null;
-    if (reservation && !pickupAt) throw fail('pickup');
+    const why = reservation ? pickupError(pickupKey, pickupTime) : null;
+    if (why) throw fail(why);
+    const pickupAt = reservation ? lisbonEpoch(pickupKey, pickupTime) : null;
+    if (reservation) await ensureSlot(pickupKey, pickupTime);
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');
@@ -202,24 +221,23 @@ function studentRouter() {
       await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number, ticket }], { session });
       return order;
     });
-    realtime.orderChanged(req.user._id);
-    if (reservation) realtime.barChanged('slots');          // a ocupação das horas mudou para todos
+    clearPopularCache();
+    realtime.orderChanged(req.user._id);                     // stock, fila e ocupação das horas mudaram para todos
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 
   // Cancelar: só as suas reservas, até 30 min antes. Reembolsa e repõe stock.
-  r.post('/orders/:id/cancel', auth, wrap(async (req, res) => {
+  r.post('/orders/:id/cancel', studentAuth, wrap(async (req, res) => {
     const out = await cancelOrder(req.params.id, { by: 'student', name: req.user.name }, (o) => {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
     realtime.orderChanged(req.user._id);
-    realtime.barChanged('slots');
     await out.populate('user', USER_FIELDS);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 
-  r.post('/wallet/topup', auth, wrap(async (req, res) => {
+  r.post('/wallet/topup', studentAuth, wrap(async (req, res) => {
     const amount = r2(+req.body.amount);
     if (!(amount > 0 && amount <= 100)) throw fail('amount');
     const u = await User.findByIdAndUpdate(req.user._id, { $inc: { balance: amount } }, { new: true });

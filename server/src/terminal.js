@@ -3,7 +3,7 @@
 const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
-const { barSettings, queueStats, findOrder, ticketOf, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const { barSettings, queueStats, findOrder, pushAction, ticketOf, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
 const { staffAuth } = require('./auth');
 const realtime = require('./realtime');
@@ -44,48 +44,48 @@ function terminalRouter() {
     const status = req.body.status || NEXT[o.status];
     if (!['received', 'preparing', 'ready', 'done'].includes(status)) throw fail('bad_status');
     const prev = o.status, now = Date.now();
-    o.status = status;
-    if (status === 'preparing' && prev === 'reserved') o.queuedAt = now;      // reserva entra na fila
-    if (status === 'ready') { o.readyAt = now; o.notifiedAt = now; } else if (status !== 'done') o.readyAt = undefined;
-    if (status === 'done') o.doneAt = now;
-    o.actions.push({ action: status, by: req.user.name, at: now });
-    await o.save();
-    realtime.orderChanged(o.user);
+    const set = { status }, unset = {};
+    if (status === 'preparing' && prev === 'reserved') set.queuedAt = now;    // reserva entra na fila
+    if (status === 'ready') { set.readyAt = now; set.notifiedAt = now; } else if (status !== 'done') unset.readyAt = 1;
+    if (status === 'done') set.doneAt = now;
+    // Só muda se o estado ainda for o que se leu: um cancelamento ao mesmo tempo (já reembolsado) nunca é desfeito.
+    const updated = await Order.findOneAndUpdate({ _id: o._id, status: prev },
+      { $set: set, $unset: unset, $push: pushAction({ action: status, by: req.user.name, at: now }) }, { new: true });
+    if (!updated) throw fail('conflict', {}, 409);
+    realtime.orderChanged(updated.user);
     // Aviso imediato ao aluno (chega mesmo com a app fechada).
     if (status === 'ready' && prev !== 'ready') {
-      push.notifyUser(o.user, {
-        title: `Pedido #${ticketOf(o)} pronto!`,
+      push.notifyUser(updated.user, {
+        title: `Pedido #${ticketOf(updated)} pronto!`,
         body: 'Levanta no balcão e mostra a senha.',
-        tag: `bp-order-${o.number}-ready`,
+        tag: `bp-order-${updated.number}-ready`,
       });
     }
-    await o.populate('user', USER_FIELDS);
-    res.json({ ok: true, order: terminalOrder(o) });
+    await updated.populate('user', USER_FIELDS);
+    res.json({ ok: true, order: terminalOrder(updated) });
   }));
 
   r.post('/orders/:id/notify', wrap(async (req, res) => {
     const now = Date.now();
-    const o = await findOrder(req.params.id);
-    if (o) {
-      o.notifiedAt = now; o.actions.push({ action: 'notified', by: req.user.name, at: now });
-      await o.save(); await o.populate('user', USER_FIELDS);
-    }
-    if (o) realtime.orderChanged(o.user);
-    if (o && o.status !== 'cancelled') {
-      push.notifyUser(o.user && o.user._id ? o.user._id : o.user, {
-        title: `Senha #${ticketOf(o)} chamada`,
-        body: 'Dirige-te ao balcão do bar.',
-        tag: `bp-order-${o.number}-call`,
-      });
-    }
-    res.json({ ok: !!o, order: o && terminalOrder(o) });
+    const found = await findOrder(req.params.id);
+    // Atómico e nunca num pedido cancelado (não se chama a senha de um pedido já reembolsado).
+    const o = found && await Order.findOneAndUpdate({ _id: found._id, status: { $ne: 'cancelled' } },
+      { notifiedAt: now, $push: pushAction({ action: 'notified', by: req.user.name, at: now }) }, { new: true });
+    if (!o) throw fail('not_found', {}, 404);
+    realtime.orderChanged(o.user, { shared: false });   // chamar a senha não muda nada para os outros
+    push.notifyUser(o.user, {
+      title: `Senha #${ticketOf(o)} chamada`,
+      body: 'Dirige-te ao balcão do bar.',
+      tag: `bp-order-${o.number}-call`,
+    });
+    await o.populate('user', USER_FIELDS);
+    res.json({ ok: true, order: terminalOrder(o) });
   }));
 
   // O bar pode anular qualquer pedido (mesmo entregue): reembolsa e repõe stock
   r.post('/orders/:id/cancel', wrap(async (req, res) => {
     const o = await cancelOrder(req.params.id, { by: 'staff', name: req.user.name });
     realtime.orderChanged(o.user);
-    if (o.type === 'reservation') realtime.barChanged('slots');
     push.notifyUser(o.user, {
       title: `Pedido #${ticketOf(o)} cancelado`,
       body: 'O valor foi devolvido ao teu saldo.',

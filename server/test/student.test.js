@@ -62,6 +62,31 @@ test('a 5.ª tentativa de PIN errada bloqueia e devolve os minutos', async () =>
   assert.deepEqual([r.body.reason, r.body.minutes], ['locked', 5]);
 });
 
+test('PINs errados em paralelo não passam das 5 tentativas (o bloqueio é atómico)', async () => {
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const pins = ['0000', '0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009'];
+  const rs = await Promise.all(pins.map((pin) => call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin } })));
+  const reasons = rs.map((r) => r.body.reason).sort();
+  assert.deepEqual(reasons, [...Array(6).fill('locked'), ...Array(4).fill('pin')]);   // só 5 PINs verificados; a 5.ª bloqueia
+  const right = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '1234' } });
+  assert.deepEqual([right.status, right.body.reason], [429, 'locked']);              // bloqueada: nem o PIN certo entra
+});
+
+test('a 5.ª password errada bloqueia e o PIN/password certos deixam de entrar', async () => {
+  let r;
+  for (let i = 0; i < 5; i++) r = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'errada' } });
+  assert.deepEqual([r.status, r.body.reason, r.body.minutes], [429, 'locked', 5]);
+  const ok = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  assert.deepEqual([ok.status, ok.body.reason], [429, 'locked']);
+});
+
+test('uma password certa não gasta tentativas do PIN', async () => {
+  for (let i = 0; i < 3; i++) await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const r = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '0000' } });
+  assert.equal(r.body.attemptsLeft, 4);
+});
+
 test('o token do 1.º passo (só password) não serve para usar a API', async () => {
   const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
   const r = await call('/api/state', { token: s1.body.preToken });
@@ -126,6 +151,18 @@ test('duas reservas ao mesmo tempo para o último lugar: só uma entra', async (
   assert.equal(results.find((r) => !r.body.ok).body.reason, 'slot_full');
 });
 
+test('várias primeiras reservas em paralelo para uma hora nova: nenhuma dá erro 500', async (t) => {
+  const capacity = RESERVATION.slotCapacity;
+  RESERVATION.slotCapacity = 2;
+  t.after(() => { RESERVATION.slotCapacity = capacity; });
+  const tokens = [await login(), await login('ana@demo.pt', 'demo1234', '4321')];
+  for (const token of tokens) await call('/api/wallet/topup', { token, body: { amount: 50 } });   // saldo para todas as reservas
+  for (const time of ['11:00', '11:30', '12:00', '13:00', '13:30']) {      // cada hora ainda não tem contador
+    const rs = await Promise.all([...tokens, ...tokens].map((token) => call('/api/orders', { token, body: reservation(time, { 1: 1 }) })));
+    assert.deepEqual(rs.map((r) => r.status).sort(), [200, 200, 409, 409], time);
+  }
+});
+
 test('cancelar uma reserva liberta o lugar na hora', async (t) => {
   const capacity = RESERVATION.slotCapacity;
   RESERVATION.slotCapacity = 1;
@@ -161,6 +198,17 @@ test('"Mais pedido": pedidos com mais de 7 dias não contam', async () => {
   await Order.collection.updateOne({ number: old.number }, { $set: { createdAt: new Date(Date.now() - 8 * 86400000) } });
   await order(token, { 1: 3 });
   assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
+});
+
+test('"Mais pedido": fica em cache, mas um pedido novo atualiza-o logo', async () => {
+  const { Order } = require('../src/models');
+  const token = await login();
+  await order(token, { 1: 3 });
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
+  await Order.updateMany({}, { status: 'cancelled' });       // mudança direta na BD: a cache ainda não sabe
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
+  await order(token, { 2: 3 });                              // pedido novo → recalcula
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [2]);
 });
 
 test('"Mais pedido": sem pedidos suficientes não destaca nenhum produto', async () => {
@@ -255,6 +303,14 @@ for (const [time, why] of [['12:15', 'fora da grelha de 30 min'], ['21:00', 'dep
     assert.equal(pickupAtFor(todayKey(), time, at('09:55')), null);
   });
 }
+
+test('a antecedência conta em minutos inteiros, como a app (12:00:40 → 12:30 ainda serve)', async () => {
+  assert.equal(pickupAtFor(todayKey(), '12:30', at('12:00') + 40000), at('12:30'));
+  assert.equal(pickupAtFor(todayKey(), '12:30', at('12:01')), null);
+  clock.now = () => at('12:01') + 5000;
+  const r = await call('/api/orders', { token: await login(), body: reservation('12:30') });
+  assert.deepEqual([r.status, r.body.reason], [400, 'lead']);   // motivo próprio (não o "só até às 18:00")
+});
 
 test('pickupAtFor recusa uma hora daqui a 5 min e aceita com 30 min de antecedência', () => {
   assert.equal(pickupAtFor(todayKey(), '12:00', at('11:55')), null);

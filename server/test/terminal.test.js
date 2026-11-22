@@ -1,7 +1,7 @@
 /* Terminal do bar: exige a sessão de uma funcionária (papel "staff"). */
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, stopServer, resetData, call, login, terminal } = require('./helpers');
+const { startServer, stopServer, resetData, call, login, terminal, staff } = require('./helpers');
 
 before(startServer);
 after(stopServer);
@@ -44,6 +44,20 @@ test('um aluno ou docente com sessão não consegue usar nenhuma rota do termina
   }
   const s = await terminal('/state');
   assert.deepEqual([s.body.paused, s.body.stock[1], s.body.orders.every((o) => o.status === 'received')], [false, 6, true]);   // 2 pedidos de 2 tostas; nada mudou
+});
+
+test('a sessão de uma funcionária não serve para as rotas da app dos alunos (só /auth/me)', async () => {
+  const token = await staff();
+  for (const [path, body] of [
+    ['/api/state', undefined], ['/api/menu', undefined], ['/api/slots', undefined], ['/api/orders/mine', undefined],
+    ['/api/orders', { type: 'now', items: { 1: 1 } }], ['/api/wallet/topup', { amount: 50 }],
+    ['/api/push/subscribe', { subscription: { endpoint: 'https://push.example/x', keys: { p256dh: 'a', auth: 'b' } } }],
+  ]) {
+    const r = await call(path, { token, body });
+    assert.deepEqual([path, r.status, r.body.reason], [path, 403, 'forbidden']);
+  }
+  assert.equal((await call('/api/auth/me', { token })).body.user.role, 'staff');
+  assert.equal((await terminal('/state')).body.stock[1], 10);              // nada foi pedido
 });
 
 test('a funcionária entra com o mesmo login em 2 passos e o papel "staff"', async () => {
@@ -184,6 +198,38 @@ test('cada ação do terminal fica registada com o nome da funcionária', async 
   await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
   const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
   assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['ready', 'Rosa Ferreira'], ['notified', 'Rosa Ferreira']]);
+});
+
+/* ---------- Concorrência e registo de ações ---------- */
+
+test('mudar o estado de um pedido que mudou entretanto (ex.: cancelado e reembolsado) → 409, sem o desfazer', async () => {
+  const { Order } = require('../src/models');
+  const o = await placeNow(await login(), { 1: 1 });
+  const original = Order.findOneAndUpdate;
+  Order.findOneAndUpdate = function (filter, ...rest) {                 // outra funcionária avançou-o mesmo antes
+    Order.findOneAndUpdate = original;
+    return Order.updateOne({ _id: o._id }, { status: 'preparing' }).then(() => original.call(this, filter, ...rest));
+  };
+  const r = await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
+  assert.deepEqual([r.status, r.body.reason], [409, 'conflict']);
+  assert.equal((await Order.findById(o._id)).status, 'preparing');
+});
+
+test('chamar a senha de um pedido cancelado não muda nada (404)', async () => {
+  const { Order } = require('../src/models');
+  const o = await placeNow(await login(), { 1: 1 });
+  await terminal(`/orders/${o._id}/cancel`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.equal(r.status, 404);
+  const saved = await Order.findById(o._id);
+  assert.deepEqual([saved.notifiedAt, saved.actions.map((a) => a.action)], [0, ['cancelled']]);
+});
+
+test('o registo de ações guarda só as últimas 50', async () => {
+  const o = await placeNow(await login(), { 1: 1 });
+  let r;
+  for (let i = 0; i < 55; i++) r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.equal(r.body.order.actions.length, 50);
 });
 
 /* ---------- Senha do dia ---------- */
