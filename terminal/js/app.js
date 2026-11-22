@@ -34,8 +34,10 @@ const ACTIONS = {
   },
 
   'notify': (d) => {
-    Store.notify(orderOf(d.number)._id);
-    toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${orderOf(d.number).customer}.`);
+    const o = orderOf(d.number);
+    if (!o) return;
+    Store.notify(o._id);
+    toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${o.customer}.`);
   },
 
   // Cancelar um pedido da fila ou uma reserva (devolve o saldo e repõe o stock)
@@ -71,6 +73,7 @@ const ACTIONS = {
   /* --- Reservas --- */
   'start-reservation': (d) => {
     const o = orderOf(d.number);
+    if (!o) return;
     Store.setStatus(o._id, 'preparing');
     toast(`Reserva #${o.ticket} na fila`, `${o.customer} foi avisado de que a preparação começou.`);
   },
@@ -137,7 +140,8 @@ document.addEventListener('change', (event) => {
   const input = event.target.closest('.speed-input');
   if (!input) return;
   ui.dragging = false;
-  Store.setStatus(orderOf(input.dataset.number)._id, STEPS[+input.value]);
+  const o = orderOf(input.dataset.number);
+  if (o) Store.setStatus(o._id, STEPS[+input.value]);   // o pedido pode ter saído da lista entretanto
 });
 
 document.addEventListener('pointerdown', (event) => { if (event.target.closest('.speed-input')) ui.dragging = true; });
