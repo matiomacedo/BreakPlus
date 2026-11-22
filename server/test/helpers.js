@@ -45,6 +45,7 @@ async function resetData() {
   ]);
   staffToken = null;
   await Setting.create({ _id: 'bar', paused: false, lastNumber: 100 });
+  require('../src/orders').clearPopularCache();
 }
 
 /** fetch → { status, body } */

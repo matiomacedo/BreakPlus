@@ -6,7 +6,7 @@ const { User, Product, Order, Transaction, PushSubscription, Slot } = require('.
 const { verify, sign, auth, studentAuth, takeAttempt, failAttempt, lockMinutes, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
-const { r2, barSettings, queueStats, popularItems, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const { r2, barSettings, queueStats, popularItems, clearPopularCache, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
 const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
@@ -221,6 +221,7 @@ function studentRouter() {
       await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number, ticket }], { session });
       return order;
     });
+    clearPopularCache();
     realtime.orderChanged(req.user._id);                     // stock, fila e ocupação das horas mudaram para todos
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));

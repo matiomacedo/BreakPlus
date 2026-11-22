@@ -43,7 +43,19 @@ const ticketOf = (o) => o.ticket ?? o.number;
 /** "Mais pedido": os produtos com mais unidades pedidas nos últimos `days` dias (pedidos cancelados não contam).
     Com menos de `minUnits` unidades no total não há dados suficientes e não se destaca nenhum. */
 const POPULAR = { days: 7, top: 2, minUnits: 3 };
+/* Cache curta: o /state é pedido por todos os alunos a cada mudança; um pedido novo ou cancelado limpa-a. */
+const POPULAR_TTL_MS = 30000;
+let popularCache = null;                                   // { at, ids }
+const clearPopularCache = () => { popularCache = null; };
+
 async function popularItems(now = Date.now()) {
+  if (popularCache && now - popularCache.at < POPULAR_TTL_MS) return popularCache.ids;
+  const ids = await computePopular(now);
+  popularCache = { at: now, ids };
+  return ids;
+}
+
+async function computePopular(now) {
   const rows = await Order.aggregate([
     { $match: { status: { $ne: 'cancelled' }, createdAt: { $gte: new Date(now - POPULAR.days * 86400000) } } },
     { $project: { items: { $objectToArray: '$items' } } },
@@ -70,10 +82,11 @@ const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session)
   }
   await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
   await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number, ticket: o.ticket }], { session });
+  clearPopularCache();
   o.status = 'cancelled'; o.cancelledBy = by; o.cancelledByName = name; o.cancelledAt = Date.now();
   if (by === 'staff') { o.actions.push({ action: 'cancelled', by: name, at: o.cancelledAt }); o.actions.splice(0, o.actions.length - MAX_ACTIONS); }
   await o.save({ session });
   return o;
 });
 
-module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, findOrder, pushAction, ticketOf, cancelOrder };
+module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, clearPopularCache, findOrder, pushAction, ticketOf, cancelOrder };

@@ -200,6 +200,17 @@ test('"Mais pedido": pedidos com mais de 7 dias não contam', async () => {
   assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
 });
 
+test('"Mais pedido": fica em cache, mas um pedido novo atualiza-o logo', async () => {
+  const { Order } = require('../src/models');
+  const token = await login();
+  await order(token, { 1: 3 });
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
+  await Order.updateMany({}, { status: 'cancelled' });       // mudança direta na BD: a cache ainda não sabe
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
+  await order(token, { 2: 3 });                              // pedido novo → recalcula
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [2]);
+});
+
 test('"Mais pedido": sem pedidos suficientes não destaca nenhum produto', async () => {
   const token = await login();
   assert.deepEqual((await call('/api/state', { token })).body.popular, []);

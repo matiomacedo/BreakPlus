@@ -19,7 +19,7 @@ const Product = model('Product', new Schema({
   stock: { type: Number, default: 0, min: 0 },
 }));
 
-const Order = model('Order', new Schema({
+const OrderSchema = new Schema({
   number: { type: Number, unique: true, index: true },    // identificador único e sequencial (interno)
   ticket: Number, ticketDay: String,                       // senha do dia (recomeça em 1 todos os dias, Lisboa)
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
@@ -35,7 +35,9 @@ const Order = model('Order', new Schema({
   cancelledBy: { type: String, enum: ['student', 'staff', null], default: null },
   cancelledByName: { type: String, default: null },        // quem anulou (nome da funcionária ou do aluno)
   actions: [{ _id: false, action: String, by: String, at: Number }],   // o que o bar fez ao pedido e quem
-}, { timestamps: true }));
+}, { timestamps: true });
+OrderSchema.index({ createdAt: -1 });                      // "Mais pedido" lê os pedidos dos últimos dias
+const Order = model('Order', OrderSchema);
 
 const Transaction = model('Transaction', new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
