@@ -20,7 +20,8 @@ const Product = model('Product', new Schema({
 }));
 
 const Order = model('Order', new Schema({
-  number: { type: Number, unique: true, index: true },
+  number: { type: Number, unique: true, index: true },    // identificador único e sequencial (interno)
+  ticket: Number, ticketDay: String,                       // senha do dia (recomeça em 1 todos os dias, Lisboa)
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
   customer: String, role: String,   // cópia no momento do pedido (fallback se a conta for apagada)
   type: { type: String, enum: ['now', 'reservation'] },
@@ -41,6 +42,7 @@ const Transaction = model('Transaction', new Schema({
   kind: { type: String, enum: ['topup', 'order', 'refund'] },
   amount: Number,                                           // + entra, − sai
   order: Number,
+  ticket: Number,                                           // senha do pedido (para o texto do movimento)
 }, { timestamps: true }));
 
 // Subscrição Web Push de um dispositivo (uma por endpoint; a mesma conta pode ter várias)
@@ -51,9 +53,10 @@ const PushSubscription = model('PushSubscription', new Schema({
   createdAt: { type: Date, default: Date.now },
 }));
 
-// Estado global do bar (pausa) + contador de senhas + chaves VAPID (geradas uma vez)
+// Estado global do bar (pausa) + contador de pedidos + senha do dia + chaves VAPID (geradas uma vez)
 const Setting = model('Setting', new Schema({
   _id: String, paused: { type: Boolean, default: false }, lastNumber: { type: Number, default: 100 },
+  ticketDay: String, lastTicket: { type: Number, default: 0 },
   vapidPublicKey: String, vapidPrivateKey: String,
 }));
 

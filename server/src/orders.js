@@ -1,4 +1,5 @@
 /* Regras de pedidos partilhadas pela app dos alunos e pelo terminal. */
+const mongoose = require('mongoose');
 const { Product, Order, User, Transaction, Setting } = require('./models');
 const { inTx } = require('./db');
 const { fail } = require('./http');
@@ -29,21 +30,27 @@ async function queueStats() {
   return { queueSize, avgPrepSec };
 }
 
+/** Pedido pelo identificador único (_id). Id mal formado → null (como um pedido que não existe). */
+const findOrder = (id, session = null) => (mongoose.isValidObjectId(id) ? Order.findById(id).session(session) : Promise.resolve(null));
+
+/** Número a mostrar (senha do dia; os pedidos antigos, sem senha, mostram o número sequencial). */
+const ticketOf = (o) => o.ticket ?? o.number;
+
 /**
  * Cancela um pedido: devolve o saldo, repõe o stock e regista o reembolso.
  * `by`: 'student' | 'staff'; `name`: quem anulou. `check(order)` pode recusar (lançando `fail`) antes de mexer em nada.
  */
-const cancelOrder = (number, { by, name }, check = () => {}) => inTx(async (session) => {
-  const o = await Order.findOne({ number: +number }).session(session);
+const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session) => {
+  const o = await findOrder(id, session);
   if (!o || o.status === 'cancelled') throw fail('not_found', {}, 404);
   check(o);
   for (const [id, qty] of Object.entries(o.items)) await Product.updateOne({ itemId: +id }, { $inc: { stock: qty } }, { session });
   await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
-  await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number }], { session });
+  await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number, ticket: o.ticket }], { session });
   o.status = 'cancelled'; o.cancelledBy = by; o.cancelledByName = name; o.cancelledAt = Date.now();
   if (by === 'staff') o.actions.push({ action: 'cancelled', by: name, at: o.cancelledAt });
   await o.save({ session });
   return o;
 });
 
-module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, cancelOrder };
+module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, findOrder, ticketOf, cancelOrder };

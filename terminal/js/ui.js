@@ -150,7 +150,7 @@ function renderTopbar() {
 /** Botão principal do cartão, conforme o estado em que o pedido está. */
 function mainButtonHTML(o) {
   if (o.status === 'received') return `<button class="btn primary big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('flame')}Iniciar preparação</button>`;
-  if (o.status === 'preparing') return `<button class="btn ready big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('megaphone')}Marcar pronto (chamar #${escapeHtml(o.number)})</button>`;
+  if (o.status === 'preparing') return `<button class="btn ready big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('megaphone')}Marcar pronto (chamar #${escapeHtml(o.ticket)})</button>`;
   return `<button class="btn deliver big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('check-circle')}Entregar pedido</button>`;
 }
 
@@ -185,7 +185,7 @@ function orderCardHTML(o, rank = null) {
   <article class="order s-${escapeHtml(o.status)} ${isNew ? 'rise' : ''} ${changedStatus ? 'flash' : ''}" data-number="${escapeHtml(o.number)}">
     <header class="order-head">
       <div class="who">
-        <span class="num">#${escapeHtml(o.number)}</span>
+        <span class="num">#${escapeHtml(o.ticket)}</span>
         <div>
           <div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div>
           <div class="origin">${origin}</div>
@@ -209,7 +209,7 @@ function orderCardHTML(o, rank = null) {
         <div class="speed-bar">
           <div class="speed-track"><div class="speed-fill"></div></div>
           <input class="speed-input" type="range" min="0" max="2" step="1" value="${step}"
-                 data-number="${escapeHtml(o.number)}" aria-label="Estado do pedido #${escapeHtml(o.number)}">
+                 data-number="${escapeHtml(o.number)}" aria-label="Estado do pedido #${escapeHtml(o.ticket)}">
         </div>
         <small>${SPEED_HINT[o.status]}</small>
       </div>
@@ -225,7 +225,7 @@ function historyItemHTML(o) {
   return `
     <div class="hist ${cancelled ? 'is-cancelled' : ''}">
       <div class="hist-top">
-        <span class="hnum">#${escapeHtml(o.number)}</span>
+        <span class="hnum">#${escapeHtml(o.ticket)}</span>
         <div class="hist-who"><b>${escapeHtml(o.customer)}</b><small>${cancelled ? 'Anulado' : 'Entregue'} ${when}</small></div>
         <b class="price">${eur(o.total)}</b>
       </div>
@@ -303,7 +303,7 @@ function reservationCardHTML(o) {
     </div>
     <div class="resv-body">
       <div class="resv-top">
-        <span class="hnum">#${escapeHtml(o.number)}</span>
+        <span class="hnum">#${escapeHtml(o.ticket)}</span>
         <div><div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div><div class="origin">Reservado na App Campus · Saldo pago</div></div>
         ${status}
       </div>
@@ -449,8 +449,8 @@ function announceArrivals() {
   if (ui.first) return;
   Store.get().orders.forEach((o) => {
     if (ui.known.has(o.number)) return;
-    if (o.status === 'received') toast(`Novo pedido #${o.number}`, `${o.customer} · ${itemsSummary(o.items)}`);
-    else if (o.status === 'reserved') toast(`Nova reserva #${o.number}`, `${o.customer} · ${pickupText(o)}`);
+    if (o.status === 'received') toast(`Novo pedido #${o.ticket}`, `${o.customer} · ${itemsSummary(o.items)}`);
+    else if (o.status === 'reserved') toast(`Nova reserva #${o.ticket}`, `${o.customer} · ${pickupText(o)}`);
   });
 }
 

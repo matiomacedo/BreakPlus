@@ -48,7 +48,7 @@ O terminal não tem chaves no frontend: as rotas `/api/terminal` exigem a sessã
 
 | Email | Password | PIN | Papel |
 |---|---|---|---|
-| `bar@demo.pt` | `demo1234` | `9999` | `staff` (Rosa Ferreira) |
+| `bar@demo.pt` | `demo1234` | `9999` | `staff` |
 
 O `npm run seed` cria-a. Numa base de dados que já tem dados (ex.: a do Render), cria-a **sem apagar nada** com:
 

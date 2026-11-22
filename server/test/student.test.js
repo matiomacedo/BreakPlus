@@ -79,6 +79,24 @@ test('pedir agora desconta o saldo e o stock e entra na fila como "received"', a
   assert.equal(s.body.queueSize, 1);
 });
 
+test('o primeiro pedido do dia recebe a senha 1 e as seguintes sobem; o número único continua a crescer', async () => {
+  const token = await login();
+  const a = (await call('/api/orders', { token, body: { type: 'now', items: { 1: 1 } } })).body.order;
+  const b = (await call('/api/orders', { token, body: { type: 'now', items: { 1: 1 } } })).body.order;
+  assert.deepEqual([a.ticket, b.ticket, a.ticketDay], [1, 2, lisbonDateKey()]);
+  assert.deepEqual([a.number, b.number], [101, 102]);
+});
+
+test('num dia novo a senha recomeça em 1', async () => {
+  const { Setting } = require('../src/models');
+  await Setting.updateOne({ _id: 'bar' }, { ticketDay: '2000-01-01', lastTicket: 57, lastNumber: 400 });
+  const token = await login();
+  const r = await call('/api/orders', { token, body: { type: 'now', items: { 1: 1 } } });
+  assert.deepEqual([r.body.order.ticket, r.body.order.number], [1, 401]);
+  const s = await call('/api/state', { token });
+  assert.equal(s.body.wallet.transactions[0].ticket, 1);               // o movimento mostra a senha
+});
+
 test('o estado do aluno só mostra os pedidos dele', async () => {
   const ana = await login('ana@demo.pt', 'demo1234', '4321');
   await call('/api/orders', { token: ana, body: { type: 'now', items: { 1: 1 } } });
@@ -105,7 +123,7 @@ test('sem saldo suficiente o pedido é recusado', async () => {
 test('o aluno cancela a sua reserva com mais de 30 min de antecedência: reembolso e stock reposto', async () => {
   const token = await login();
   const { body } = await call('/api/orders', { token, body: reservation() });
-  const r = await call(`/api/orders/${body.order.number}/cancel`, { token, body: {} });
+  const r = await call(`/api/orders/${body.order._id}/cancel`, { token, body: {} });
   assert.equal(r.body.ok, true);
   assert.equal(r.body.order.cancelledBy, 'student');
   const s = await call('/api/state', { token });
@@ -116,14 +134,14 @@ test('o aluno não cancela uma reserva a menos de 30 min', async () => {
   const token = await login();
   const { body } = await call('/api/orders', { token, body: reservation('10:30') });
   clock.now = () => at('10:10');                          // faltam 20 min
-  const r = await call(`/api/orders/${body.order.number}/cancel`, { token, body: {} });
+  const r = await call(`/api/orders/${body.order._id}/cancel`, { token, body: {} });
   assert.equal(r.body.reason, 'window');
 });
 
 test('o aluno não cancela reservas de outra pessoa', async () => {
   const ana = await login('ana@demo.pt', 'demo1234', '4321');
   const { body } = await call('/api/orders', { token: ana, body: reservation() });
-  const r = await call(`/api/orders/${body.order.number}/cancel`, { token: await login(), body: {} });
+  const r = await call(`/api/orders/${body.order._id}/cancel`, { token: await login(), body: {} });
   assert.equal(r.status, 403);
 });
 

@@ -90,9 +90,9 @@ test('o histórico mostra o nome atual do utilizador, não a cópia guardada no 
 
 test('avançar o estado: sem estado explícito segue para o seguinte', async () => {
   const o = await placeNow(await login());
-  const r = await terminal(`/orders/${o.number}/status`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/status`, { body: {} });
   assert.equal(r.body.order.status, 'preparing');
-  const r2 = await terminal(`/orders/${o.number}/status`, { body: { status: 'ready' } });
+  const r2 = await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
   assert.equal(r2.body.order.status, 'ready');
   assert.ok(r2.body.order.readyAt);
 });
@@ -100,22 +100,22 @@ test('avançar o estado: sem estado explícito segue para o seguinte', async () 
 test('o aluno vê o pedido como pronto depois de o terminal o avançar', async () => {
   const token = await login();
   const o = await placeNow(token);
-  await terminal(`/orders/${o.number}/status`, { body: { status: 'ready' } });
+  await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
   const s = await call('/api/state', { token });
   assert.equal(s.body.orders[0].status, 'ready');
 });
 
 test('chamar outra vez atualiza notifiedAt', async () => {
   const o = await placeNow(await login());
-  const r = await terminal(`/orders/${o.number}/notify`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
   assert.ok(r.body.order.notifiedAt > 0);
 });
 
 test('cancelar no terminal: reembolsa, repõe stock, regista Transaction e cancelledBy = staff', async () => {
   const token = await login();
   const o = await placeNow(token);
-  await terminal(`/orders/${o.number}/status`, { body: { status: 'preparing' } });   // o bar pode anular em qualquer estado
-  const r = await terminal(`/orders/${o.number}/cancel`, { body: {} });
+  await terminal(`/orders/${o._id}/status`, { body: { status: 'preparing' } });   // o bar pode anular em qualquer estado
+  const r = await terminal(`/orders/${o._id}/cancel`, { body: {} });
   assert.equal(r.body.ok, true);
   assert.deepEqual([r.body.order.status, r.body.order.cancelledBy, r.body.order.cancelledByName], ['cancelled', 'staff', 'Rosa Ferreira']);
   assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['preparing', 'Rosa Ferreira'], ['cancelled', 'Rosa Ferreira']]);
@@ -127,8 +127,8 @@ test('cancelar no terminal: reembolsa, repõe stock, regista Transaction e cance
 test('cancelar duas vezes o mesmo pedido não reembolsa duas vezes', async () => {
   const token = await login();
   const o = await placeNow(token);
-  await terminal(`/orders/${o.number}/cancel`, { body: {} });
-  const again = await terminal(`/orders/${o.number}/cancel`, { body: {} });
+  await terminal(`/orders/${o._id}/cancel`, { body: {} });
+  const again = await terminal(`/orders/${o._id}/cancel`, { body: {} });
   assert.equal(again.status, 404);
   assert.equal((await call('/api/state', { token })).body.wallet.balance, 12.5);
 });
@@ -181,9 +181,32 @@ test('/api/users e /api/users/:id/orders foram removidos', async () => {
 
 test('cada ação do terminal fica registada com o nome da funcionária', async () => {
   const o = await placeNow(await login());
-  await terminal(`/orders/${o.number}/status`, { body: { status: 'ready' } });
-  const r = await terminal(`/orders/${o.number}/notify`, { body: {} });
+  await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
   assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['ready', 'Rosa Ferreira'], ['notified', 'Rosa Ferreira']]);
+});
+
+/* ---------- Senha do dia ---------- */
+
+test('pedidos de dias diferentes com a mesma senha não se confundem (as rotas usam o id único)', async () => {
+  const { Setting } = require('../src/models');
+  const token = await login();
+  const ontem = await placeNow(token, { 1: 1 });
+  await Setting.updateOne({ _id: 'bar' }, { ticketDay: '2000-01-01' });       // o dia mudou
+  const hoje = await placeNow(token, { 2: 1 });
+  assert.deepEqual([ontem.ticket, hoje.ticket], [1, 1]);
+  assert.notEqual(ontem._id, hoje._id);
+
+  await terminal(`/orders/${hoje._id}/status`, { body: { status: 'preparing' } });
+  await terminal(`/orders/${ontem._id}/cancel`, { body: {} });
+  const s = await terminal('/state');
+  const byId = Object.fromEntries(s.body.orders.map((o) => [o._id, o.status]));
+  assert.deepEqual([byId[ontem._id], byId[hoje._id]], ['cancelled', 'preparing']);
+});
+
+test('um id de pedido inválido ou inexistente → 404', async () => {
+  assert.equal((await terminal('/orders/101/status', { body: {} })).status, 404);
+  assert.equal((await terminal('/orders/64b000000000000000000000/cancel', { body: {} })).status, 404);
 });
 
 /* ---------- Web Push ---------- */
@@ -205,15 +228,15 @@ test('quando o pedido fica pronto o servidor envia Web Push ao aluno', async () 
   };
 
   try {
-    await terminal(`/orders/${order.number}/status`, { body: { status: 'preparing' } });
-    await terminal(`/orders/${order.number}/status`, { body: { status: 'ready' } });
+    await terminal(`/orders/${order._id}/status`, { body: { status: 'preparing' } });
+    await terminal(`/orders/${order._id}/status`, { body: { status: 'ready' } });
     for (let i = 0; i < 40 && !sent.length; i++) await new Promise((r) => setTimeout(r, 25));
   } finally {
     webpush.sendNotification = original;
   }
 
   assert.equal(sent.length, 1);
-  assert.match(sent[0].payload.title, new RegExp(`#${order.number}`));
+  assert.equal(sent[0].payload.title, `Pedido #${order.ticket} pronto!`);   // a senha do dia, não o número interno
   assert.equal(sent[0].subscription.endpoint, 'https://push.example/sub/ready');
 });
 
@@ -234,8 +257,8 @@ test('chamar a senha e anular também enviam Web Push', async () => {
   };
 
   try {
-    await terminal(`/orders/${order.number}/notify`, { body: {} });
-    await terminal(`/orders/${order.number}/cancel`, { body: {} });
+    await terminal(`/orders/${order._id}/notify`, { body: {} });
+    await terminal(`/orders/${order._id}/cancel`, { body: {} });
     for (let i = 0; i < 40 && sent.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
   } finally {
     webpush.sendNotification = original;

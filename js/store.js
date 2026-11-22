@@ -12,7 +12,7 @@ const Store = createStore({
   actions: ({ post, withOrder }) => ({
     // A hora de levantamento (pickupAt) é calculada no servidor a partir do dia e da hora.
     placeOrder: async (p) => withOrder(await post('/api/orders', { type: p.type, items: p.items, pickupKey: p.pickupKey, pickupTime: p.pickupTime })),
-    cancelOrder: async (number) => withOrder(await post(`/api/orders/${number}/cancel`, {})),
+    cancelOrder: async (id) => withOrder(await post(`/api/orders/${id}/cancel`, {})),
     topup: (amount) => post('/api/wallet/topup', { amount }),
   }),
 });

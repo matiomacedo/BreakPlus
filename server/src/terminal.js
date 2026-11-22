@@ -3,7 +3,7 @@
 const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
-const { barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const { barSettings, queueStats, findOrder, ticketOf, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
 const { staffAuth } = require('./auth');
 const realtime = require('./realtime');
@@ -38,8 +38,8 @@ function terminalRouter() {
     });
   }));
 
-  r.post('/orders/:n/status', wrap(async (req, res) => {
-    const o = await Order.findOne({ number: +req.params.n });
+  r.post('/orders/:id/status', wrap(async (req, res) => {
+    const o = await findOrder(req.params.id);
     if (!o || o.status === 'cancelled') throw fail('not_found', {}, 404);
     const status = req.body.status || NEXT[o.status];
     if (!['received', 'preparing', 'ready', 'done'].includes(status)) throw fail('bad_status');
@@ -54,7 +54,7 @@ function terminalRouter() {
     // Aviso imediato ao aluno (chega mesmo com a app fechada).
     if (status === 'ready' && prev !== 'ready') {
       push.notifyUser(o.user, {
-        title: `Pedido #${o.number} pronto!`,
+        title: `Pedido #${ticketOf(o)} pronto!`,
         body: 'Levanta no balcão e mostra a senha.',
         tag: `bp-order-${o.number}-ready`,
       });
@@ -63,15 +63,17 @@ function terminalRouter() {
     res.json({ ok: true, order: terminalOrder(o) });
   }));
 
-  r.post('/orders/:n/notify', wrap(async (req, res) => {
+  r.post('/orders/:id/notify', wrap(async (req, res) => {
     const now = Date.now();
-    const o = await Order.findOneAndUpdate({ number: +req.params.n },
-      { notifiedAt: now, $push: { actions: { action: 'notified', by: req.user.name, at: now } } }, { new: true })
-      .populate('user', USER_FIELDS);
+    const o = await findOrder(req.params.id);
+    if (o) {
+      o.notifiedAt = now; o.actions.push({ action: 'notified', by: req.user.name, at: now });
+      await o.save(); await o.populate('user', USER_FIELDS);
+    }
     if (o) realtime.orderChanged(o.user);
     if (o && o.status !== 'cancelled') {
       push.notifyUser(o.user && o.user._id ? o.user._id : o.user, {
-        title: `Senha #${o.number} chamada`,
+        title: `Senha #${ticketOf(o)} chamada`,
         body: 'Dirige-te ao balcão do bar.',
         tag: `bp-order-${o.number}-call`,
       });
@@ -80,11 +82,11 @@ function terminalRouter() {
   }));
 
   // O bar pode anular qualquer pedido (mesmo entregue): reembolsa e repõe stock
-  r.post('/orders/:n/cancel', wrap(async (req, res) => {
-    const o = await cancelOrder(req.params.n, { by: 'staff', name: req.user.name });
+  r.post('/orders/:id/cancel', wrap(async (req, res) => {
+    const o = await cancelOrder(req.params.id, { by: 'staff', name: req.user.name });
     realtime.orderChanged(o.user);
     push.notifyUser(o.user, {
-      title: `Pedido #${o.number} cancelado`,
+      title: `Pedido #${ticketOf(o)} cancelado`,
       body: 'O valor foi devolvido ao teu saldo.',
       tag: `bp-order-${o.number}-cancel`,
     });
