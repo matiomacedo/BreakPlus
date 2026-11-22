@@ -11,6 +11,7 @@ API Express + Mongoose para a app dos alunos (`/api/*`) e para o terminal do bar
    - `CORS_ORIGINS`: de onde abres as páginas, ex.: `http://localhost:8000,http://localhost:5500`.
 3. `npm install && npm run seed && npm run dev`
    - ⚠️ `npm run seed` **apaga** todas as coleções da base de dados indicada em `MONGODB_URI`.
+   - `npm run create-staff` só acrescenta a conta do terminal (`bar@demo.pt` / `demo1234` / PIN `9999`, ou `-- <email> <nome> <password> <pin>`), sem apagar nada.
 4. Testar: `curl localhost:3000/api/version`. O terminal usa o login de uma conta com o papel `staff` (o seed cria `bar@demo.pt` / `demo1234` / PIN `9999`).
 
 O servidor recusa arrancar (com a razão na consola) se faltar `MONGODB_URI` ou `JWT_SECRET`, ou se o MongoDB não for um replica set.

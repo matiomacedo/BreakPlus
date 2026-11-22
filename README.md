@@ -44,6 +44,20 @@ O servidor recusa arrancar se faltar `MONGODB_URI` ou `JWT_SECRET`, ou se o Mong
 
 O terminal não tem chaves no frontend: as rotas `/api/terminal` exigem a sessão de uma conta com o papel `staff`, e cada ação fica registada com o nome da funcionária.
 
+### Conta do terminal
+
+| Email | Password | PIN | Papel |
+|---|---|---|---|
+| `bar@demo.pt` | `demo1234` | `9999` | `staff` (Rosa Ferreira) |
+
+O `npm run seed` cria-a. Numa base de dados que já tem dados (ex.: a do Render), cria-a **sem apagar nada** com:
+
+```sh
+cd server
+MONGODB_URI="<connection string do Atlas>" npm run create-staff                     # conta acima
+MONGODB_URI="<...>" npm run create-staff -- maria@ipvc.pt "Maria Silva" <password> <pin>   # outra funcionária
+```
+
 ## Publicar online (Render + Vercel)
 
 A API fica no **Render** e o frontend estático na **Vercel**. O `terminal/config.js` continua fora do git: na Vercel é **gerado no build** a partir de variáveis de ambiente.
