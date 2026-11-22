@@ -58,7 +58,9 @@ function studentRouter() {
     if (lock) throw fail('locked', { minutes: lock }, 429);
     if (!/^\d{4}$/.test(String(req.body.pin)) || !verify(req.body.pin, u.pinHash)) {
       await registerFail(u);
-      throw fail('pin', { attemptsLeft: u.lockUntil ? 0 : MAX_FAILS - u.failCount }, 401);
+      const minutes = lockedMin(u);
+      if (minutes) throw fail('locked', { minutes }, 429);
+      throw fail('pin', { attemptsLeft: MAX_FAILS - u.failCount }, 401);
     }
     u.failCount = 0; u.lockUntil = null; await u.save();
     res.json({ ok: true, token: sign(u, 'full'), user: publicUser(u) });

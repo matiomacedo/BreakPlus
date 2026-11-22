@@ -46,6 +46,23 @@ test('PIN errado é recusado e diz quantas tentativas faltam', async () => {
   assert.deepEqual([s2.body.reason, s2.body.attemptsLeft], ['pin', 4]);
 });
 
+test('depois de um bloqueio expirado, o PIN errado conta tentativas de novo (não diz bloqueada)', async () => {
+  const { User } = require('../src/models');
+  await User.updateOne({ email: 'aluno@demo.pt' }, { lockUntil: new Date(Date.now() - 60000), failCount: 0 });
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const s2 = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '0000' } });
+  assert.equal(s2.status, 401);
+  assert.deepEqual([s2.body.reason, s2.body.attemptsLeft], ['pin', 4]);
+});
+
+test('a 5.ª tentativa de PIN errada bloqueia e devolve os minutos', async () => {
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  let r;
+  for (let i = 0; i < 5; i++) r = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '0000' } });
+  assert.equal(r.status, 429);
+  assert.deepEqual([r.body.reason, r.body.minutes], ['locked', 5]);
+});
+
 test('o token do 1.º passo (só password) não serve para usar a API', async () => {
   const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
   const r = await call('/api/state', { token: s1.body.preToken });
