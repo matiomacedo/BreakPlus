@@ -33,6 +33,7 @@ const auth = async (req, res, next) => {
 
 const lockedMin = (u) => (u.lockUntil && u.lockUntil > new Date() ? Math.ceil((u.lockUntil - new Date()) / 60000) : 0);
 async function registerFail(u) {
+  if (u.lockUntil && !lockedMin(u)) u.lockUntil = null;   // bloqueio antigo já expirado
   u.failCount += 1;
   if (u.failCount >= MAX_FAILS) { u.lockUntil = new Date(Date.now() + LOCK_MIN * 60000); u.failCount = 0; }
   await u.save();

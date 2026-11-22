@@ -7,22 +7,27 @@ const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
 const { r2, barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
+const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
 const { loadSharedData } = require('./shared-data');
 
-const { RESERVATION } = loadSharedData();     // mesmas regras que a app (shared/data.js)
+const { RESERVATION, BAR } = loadSharedData();     // mesmas regras que a app (shared/data.js)
 const orderOut = (o, uid) => {
   const obj = o.toObject();
   const userId = obj.user && obj.user._id ? obj.user._id : obj.user;
   return { ...obj, user: userId, mine: String(userId) === String(uid), ...currentCustomer(o) };
 };
 
-const pad = (n) => String(n).padStart(2, '0');
-const localDateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
-
-/** As reservas são só para o dia atual e, no máximo, até RESERVATION.todayUntil (18:00). */
-function invalidPickup(pickupKey, pickupTime) {
-  return pickupKey !== localDateKey() || toMinutes(pickupTime) > toMinutes(RESERVATION.todayUntil);
+/**
+ * Hora de levantamento (ms) calculada no servidor, em Europe/Lisbon (o `pickupAt` do cliente é ignorado).
+ * null se não for hoje, se estiver fora de BAR.open–RESERVATION.todayUntil, fora da grelha de
+ * RESERVATION.stepMin ou com menos de RESERVATION.minLeadMin de antecedência.
+ */
+function pickupAtFor(pickupKey, pickupTime, now = clock.now()) {
+  if (pickupKey !== lisbonDateKey(now)) return null;
+  const m = toMinutes(pickupTime), open = toMinutes(BAR.open);
+  if (m < open || m > toMinutes(RESERVATION.todayUntil) || (m - open) % RESERVATION.stepMin) return null;
+  const at = lisbonEpoch(pickupKey, pickupTime);
+  return at - now < RESERVATION.minLeadMin * 60000 ? null : at;
 }
 
 /** { "1": 2 } → { 1: 2 } com ids e quantidades inteiros positivos (senão recusa). */
@@ -58,7 +63,9 @@ function studentRouter() {
     if (lock) throw fail('locked', { minutes: lock }, 429);
     if (!/^\d{4}$/.test(String(req.body.pin)) || !verify(req.body.pin, u.pinHash)) {
       await registerFail(u);
-      throw fail('pin', { attemptsLeft: u.lockUntil ? 0 : MAX_FAILS - u.failCount }, 401);
+      const minutes = lockedMin(u);
+      if (minutes) throw fail('locked', { minutes }, 429);
+      throw fail('pin', { attemptsLeft: MAX_FAILS - u.failCount }, 401);
     }
     u.failCount = 0; u.lockUntil = null; await u.save();
     res.json({ ok: true, token: sign(u, 'full'), user: publicUser(u) });
@@ -141,14 +148,15 @@ function studentRouter() {
   /* ---------- Pedidos ---------- */
 
   r.post('/orders', auth, wrap(async (req, res) => {
-    const { type, pickupKey, pickupTime, pickupAt } = req.body;
+    const { type, pickupKey, pickupTime } = req.body;
     if (!['now', 'reservation'].includes(type)) throw fail('type');
     const items = parseItems(req.body.items);
     const reservation = type === 'reservation';
     // Dia e hora vão parar ao ecrã do terminal: só se aceita o formato exato ("2026-11-05", "12:30")
-    if (reservation && !(/^\d{4}-\d{2}-\d{2}$/.test(pickupKey) && /^([01]\d|2[0-3]):[0-5]\d$/.test(pickupTime) && +pickupAt > Date.now())) throw fail('pickup');
-    // Só se reserva para hoje e até às 18:00 (mesma regra que a app mostra em shared/data.js)
-    if (reservation && invalidPickup(pickupKey, pickupTime)) throw fail('pickup');
+    if (reservation && !(/^\d{4}-\d{2}-\d{2}$/.test(pickupKey) && /^([01]\d|2[0-3]):[0-5]\d$/.test(pickupTime))) throw fail('pickup');
+    // Só se reserva para hoje, na grelha do bar e até às 18:00 (mesmas regras que a app mostra em shared/data.js)
+    const pickupAt = reservation ? pickupAtFor(pickupKey, pickupTime) : null;
+    if (reservation && !pickupAt) throw fail('pickup');
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');
@@ -166,7 +174,7 @@ function studentRouter() {
       const [order] = await Order.create([{
         number: s2.lastNumber, user: u._id, customer: u.name, role: u.roleLabel, type, items, total,
         status: reservation ? 'reserved' : 'received',
-        ...(reservation ? { pickupKey, pickupTime, pickupAt: +pickupAt } : {}), queuedAt: type === 'now' ? Date.now() : undefined,
+        ...(reservation ? { pickupKey, pickupTime, pickupAt } : {}), queuedAt: type === 'now' ? Date.now() : undefined,
       }], { session });
       await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number }], { session });
       return order;
@@ -178,7 +186,7 @@ function studentRouter() {
   r.post('/orders/:n/cancel', auth, wrap(async (req, res) => {
     const out = await cancelOrder(req.params.n, 'student', (o) => {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
-      if (o.status !== 'reserved' || o.pickupAt - Date.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
+      if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
     await out.populate('user', USER_FIELDS);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
@@ -195,4 +203,4 @@ function studentRouter() {
   return r;
 }
 
-module.exports = { studentRouter };
+module.exports = { studentRouter, pickupAtFor };
