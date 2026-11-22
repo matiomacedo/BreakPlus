@@ -70,7 +70,7 @@ function terminalRouter() {
       o.notifiedAt = now; o.actions.push({ action: 'notified', by: req.user.name, at: now });
       await o.save(); await o.populate('user', USER_FIELDS);
     }
-    if (o) realtime.orderChanged(o.user);
+    if (o) realtime.orderChanged(o.user, { shared: false });   // chamar a senha não muda nada para os outros
     if (o && o.status !== 'cancelled') {
       push.notifyUser(o.user && o.user._id ? o.user._id : o.user, {
         title: `Senha #${ticketOf(o)} chamada`,
@@ -85,7 +85,6 @@ function terminalRouter() {
   r.post('/orders/:id/cancel', wrap(async (req, res) => {
     const o = await cancelOrder(req.params.id, { by: 'staff', name: req.user.name });
     realtime.orderChanged(o.user);
-    if (o.type === 'reservation') realtime.barChanged('slots');
     push.notifyUser(o.user, {
       title: `Pedido #${ticketOf(o)} cancelado`,
       body: 'O valor foi devolvido ao teu saldo.',

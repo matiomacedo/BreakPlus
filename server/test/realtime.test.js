@@ -36,16 +36,26 @@ test('um pedido feito na app chega ao terminal e ao próprio aluno, sem polling'
   assert.deepEqual(mineGot, [{ type: 'order' }]);
 });
 
-test('um aluno nunca recebe eventos dos pedidos de outro aluno', async () => {
+test('um aluno nunca recebe eventos dos pedidos de outro aluno, só o aviso "queue" (sem dados)', async () => {
   const goncalo = await login();
   const ana = await login('ana@demo.pt', 'demo1234', '4321');
   const anaSocket = await connect({ token: ana });
   const anaGot = collect(anaSocket);
   const r = await call('/api/orders', { token: goncalo, body: { type: 'now', items: { 1: 1 } } });
   await terminal(`/orders/${r.body.order._id}/status`, { body: { status: 'ready' } });
+  await terminal(`/orders/${r.body.order._id}/notify`, { body: {} });
   await call('/api/wallet/topup', { token: goncalo, body: { amount: 5 } });
   await settle();
-  assert.deepEqual(anaGot, []);
+  assert.deepEqual(anaGot, [{ type: 'queue' }, { type: 'queue' }]);   // pedido novo e mudança de estado; nada da chamada nem do saldo
+});
+
+test('com o socket ligado, os outros alunos sabem logo que o stock mudou', async () => {
+  const ana = await login('ana@demo.pt', 'demo1234', '4321');
+  const anaGot = collect(await connect({ token: ana }));
+  await call('/api/orders', { token: await login(), body: { type: 'now', items: { 2: 3 } } });   // leva os 3 croissants
+  await settle();
+  assert.deepEqual(anaGot, [{ type: 'queue' }]);
+  assert.equal((await call('/api/state', { token: ana })).body.stock[2], 0);
 });
 
 test('o terminal avisa o dono do pedido quando muda o estado', async () => {

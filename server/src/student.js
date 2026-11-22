@@ -202,8 +202,7 @@ function studentRouter() {
       await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number, ticket }], { session });
       return order;
     });
-    realtime.orderChanged(req.user._id);
-    if (reservation) realtime.barChanged('slots');          // a ocupação das horas mudou para todos
+    realtime.orderChanged(req.user._id);                     // stock, fila e ocupação das horas mudaram para todos
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 
@@ -214,7 +213,6 @@ function studentRouter() {
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
     realtime.orderChanged(req.user._id);
-    realtime.barChanged('slots');
     await out.populate('user', USER_FIELDS);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
