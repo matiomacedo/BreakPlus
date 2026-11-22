@@ -1,11 +1,11 @@
-/* Rotas do terminal do bar (montadas em /api/terminal). Sem login: cada pedido traz a chave
-   partilhada TERMINAL_KEY no cabeçalho X-Terminal-Key (configurada em terminal/config.js). */
+/* Rotas do terminal do bar (montadas em /api/terminal). Exigem sessão de uma funcionária
+   (papel "staff", mesmo login em 2 passos da app). Cada ação fica registada com o nome dela. */
 const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
 const { barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
-const { sameKey } = require('./auth');
+const { staffAuth } = require('./auth');
 const realtime = require('./realtime');
 
 const NEXT = { received: 'preparing', preparing: 'ready', ready: 'done' };
@@ -19,13 +19,10 @@ const terminalOrder = (o) => {
 /** Inteiro finito (aceita "3" vindo do JSON, recusa 1.5, "abc", null, Infinity). */
 const toInt = (v) => (v !== null && v !== '' && Number.isInteger(+v) ? +v : null);
 
-function terminalRouter({ terminalKey }) {
+function terminalRouter() {
   const r = express.Router();
 
-  r.use((req, res, next) => {
-    if (sameKey(req.get('X-Terminal-Key') || '', terminalKey)) return next();
-    res.status(401).json({ ok: false, reason: 'terminal_key' });
-  });
+  r.use(staffAuth);
 
   // Estado do bar: todos os pedidos, stock, pausa e fila (sem carteiras nem dados de utilizadores)
   r.get('/state', wrap(async (_req, res) => {
@@ -51,6 +48,7 @@ function terminalRouter({ terminalKey }) {
     if (status === 'preparing' && prev === 'reserved') o.queuedAt = now;      // reserva entra na fila
     if (status === 'ready') { o.readyAt = now; o.notifiedAt = now; } else if (status !== 'done') o.readyAt = undefined;
     if (status === 'done') o.doneAt = now;
+    o.actions.push({ action: status, by: req.user.name, at: now });
     await o.save();
     realtime.orderChanged(o.user);
     // Aviso imediato ao aluno (chega mesmo com a app fechada).
@@ -66,7 +64,9 @@ function terminalRouter({ terminalKey }) {
   }));
 
   r.post('/orders/:n/notify', wrap(async (req, res) => {
-    const o = await Order.findOneAndUpdate({ number: +req.params.n }, { notifiedAt: Date.now() }, { new: true })
+    const now = Date.now();
+    const o = await Order.findOneAndUpdate({ number: +req.params.n },
+      { notifiedAt: now, $push: { actions: { action: 'notified', by: req.user.name, at: now } } }, { new: true })
       .populate('user', USER_FIELDS);
     if (o) realtime.orderChanged(o.user);
     if (o && o.status !== 'cancelled') {
@@ -81,7 +81,7 @@ function terminalRouter({ terminalKey }) {
 
   // O bar pode anular qualquer pedido (mesmo entregue): reembolsa e repõe stock
   r.post('/orders/:n/cancel', wrap(async (req, res) => {
-    const o = await cancelOrder(req.params.n, 'staff');
+    const o = await cancelOrder(req.params.n, { by: 'staff', name: req.user.name });
     realtime.orderChanged(o.user);
     push.notifyUser(o.user, {
       title: `Pedido #${o.number} cancelado`,

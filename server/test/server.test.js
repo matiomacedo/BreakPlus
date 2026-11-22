@@ -6,11 +6,11 @@ const mongoose = require('mongoose');
 const { startServer, stopServer, resetData, call, login } = require('./helpers');
 const { loadConfig } = require('../src/config');
 
-const ENV = { MONGODB_URI: 'mongodb://x', JWT_SECRET: 's', TERMINAL_KEY: 'k' };
+const ENV = { MONGODB_URI: 'mongodb://x', JWT_SECRET: 's' };
 
 /* ---------- Configuração ---------- */
 
-for (const name of ['MONGODB_URI', 'JWT_SECRET', 'TERMINAL_KEY']) {
+for (const name of ['MONGODB_URI', 'JWT_SECRET']) {
   test(`sem ${name} o servidor recusa arrancar e diz o que falta`, () => {
     assert.throws(() => loadConfig({ ...ENV, [name]: '' }), new RegExp(name));
   });
@@ -42,11 +42,11 @@ test('com servidor', async (t) => {
     assert.equal(r.headers.get('access-control-allow-origin'), null);
   });
 
-  await t.test('CORS: o preflight do terminal aceita o cabeçalho X-Terminal-Key', async () => {
+  await t.test('CORS: o preflight aceita o cabeçalho Authorization (sessão das duas apps)', async () => {
     const r = await call('/api/terminal/state', { method: 'OPTIONS', headers: {
-      Origin: 'http://localhost:8000', 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'x-terminal-key',
+      Origin: 'http://localhost:8000', 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization',
     } });
-    assert.match(r.headers.get('access-control-allow-headers') || '', /x-terminal-key/i);
+    assert.match(r.headers.get('access-control-allow-headers') || '', /authorization/i);
   });
 
   await t.test('sem as definições "bar" (base sem seed) o estado e os pedidos funcionam e criam-nas', async () => {

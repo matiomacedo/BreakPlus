@@ -31,16 +31,18 @@ async function queueStats() {
 
 /**
  * Cancela um pedido: devolve o saldo, repõe o stock e regista o reembolso.
- * `by`: 'student' | 'staff'. `check(order)` pode recusar (lançando `fail`) antes de mexer em nada.
+ * `by`: 'student' | 'staff'; `name`: quem anulou. `check(order)` pode recusar (lançando `fail`) antes de mexer em nada.
  */
-const cancelOrder = (number, by, check = () => {}) => inTx(async (session) => {
+const cancelOrder = (number, { by, name }, check = () => {}) => inTx(async (session) => {
   const o = await Order.findOne({ number: +number }).session(session);
   if (!o || o.status === 'cancelled') throw fail('not_found', {}, 404);
   check(o);
   for (const [id, qty] of Object.entries(o.items)) await Product.updateOne({ itemId: +id }, { $inc: { stock: qty } }, { session });
   await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
   await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number }], { session });
-  o.status = 'cancelled'; o.cancelledBy = by; o.cancelledAt = Date.now(); await o.save({ session });
+  o.status = 'cancelled'; o.cancelledBy = by; o.cancelledByName = name; o.cancelledAt = Date.now();
+  if (by === 'staff') o.actions.push({ action: 'cancelled', by: name, at: o.cancelledAt });
+  await o.save({ session });
   return o;
 });
 

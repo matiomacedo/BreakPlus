@@ -7,14 +7,14 @@ API Express + Mongoose para a app dos alunos (`/api/*`) e para o terminal do bar
 1. MongoDB (**tem de ser um replica set**, ver abaixo). Atlas: cluster gratuito → Database Access (utilizador) → Network Access (o teu IP) → Connect → copiar a connection string.
 2. `cp .env.example .env` e preenche:
    - `MONGODB_URI`: a connection string.
-   - `JWT_SECRET` e `TERMINAL_KEY`: valores aleatórios (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
+   - `JWT_SECRET`: valor aleatório (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
    - `CORS_ORIGINS`: de onde abres as páginas, ex.: `http://localhost:8000,http://localhost:5500`.
 3. `npm install && npm run seed && npm run dev`
    - ⚠️ `npm run seed` **apaga** todas as coleções da base de dados indicada em `MONGODB_URI`.
-4. Copia `TERMINAL_KEY` para `terminal/config.js` (a partir de `terminal/config.example.js`).
-5. Testar: `curl -H "X-Terminal-Key: <a chave>" localhost:3000/api/terminal/state`
+   - `npm run create-staff` só acrescenta a conta do terminal (`bar@demo.pt` / `demo1234` / PIN `9999`, ou `-- <email> <nome> <password> <pin>`), sem apagar nada.
+4. Testar: `curl localhost:3000/api/version`. O terminal usa o login de uma conta com o papel `staff` (o seed cria `bar@demo.pt` / `demo1234` / PIN `9999`).
 
-O servidor recusa arrancar (com a razão na consola) se faltar `MONGODB_URI`, `JWT_SECRET` ou `TERMINAL_KEY`, ou se o MongoDB não for um replica set.
+O servidor recusa arrancar (com a razão na consola) se faltar `MONGODB_URI` ou `JWT_SECRET`, ou se o MongoDB não for um replica set.
 
 ## Porque é que preciso de um replica set?
 
@@ -27,8 +27,8 @@ Os pedidos e os cancelamentos mexem no stock, no saldo e no histórico numa **tr
 | Quem | Rotas | Proteção |
 |---|---|---|
 | Alunos/docentes | `POST /api/auth/login`, `POST /api/auth/pin`, `GET /api/auth/me`, `GET /api/state`, `POST /api/orders`, `POST /api/orders/:n/cancel`, `POST /api/wallet/topup`, `GET /api/menu`, `GET /api/orders/mine` | token de sessão (password + PIN) |
-| Terminal | `GET /api/terminal/state`, `POST /api/terminal/orders/:n/status`, `.../notify`, `.../cancel`, `POST /api/terminal/stock/:id`, `POST /api/terminal/paused` | cabeçalho `X-Terminal-Key` = `TERMINAL_KEY` |
-| Tempo real | Socket.IO em `/socket.io/`: evento `changed` `{ type }` depois de cada escrita (a app volta a pedir o seu `/state`). Sala por aluno (só os seus pedidos/saldo) e sala do terminal (todos) | `auth: { token }` (sessão completa) ou `auth: { terminalKey }` |
+| Terminal | `GET /api/terminal/state`, `POST /api/terminal/orders/:n/status`, `.../notify`, `.../cancel`, `POST /api/terminal/stock/:id`, `POST /api/terminal/paused` | token de sessão de uma conta `staff` (outro papel → 403) |
+| Tempo real | Socket.IO em `/socket.io/`: evento `changed` `{ type }` depois de cada escrita (a app volta a pedir o seu `/state`). Sala por aluno (só os seus pedidos/saldo) e sala do terminal (todos) | `auth: { token }` (sessão completa; contas `staff` entram na sala do terminal) |
 
 ## Código
 
@@ -37,7 +37,7 @@ src/index.js      arranque: configuração, ligação ao MongoDB, verificação 
 src/config.js     variáveis de ambiente (falha logo se faltar alguma obrigatória)
 src/app.js        monta a API (CORS, JSON, routers)
 src/student.js    rotas da app dos alunos (login em 2 passos, estado, pedidos, saldo)
-src/terminal.js   rotas do terminal (chave partilhada)
+src/terminal.js   rotas do terminal (sessão staff; regista quem fez cada ação)
 src/realtime.js   Socket.IO: autenticação das ligações, salas e avisos de mudança
 src/orders.js     regras partilhadas: cancelar (reembolso + stock), fila, definições do bar
 src/auth.js       hashes, tokens e middleware de sessão

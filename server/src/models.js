@@ -2,7 +2,7 @@ const { Schema, model } = require('mongoose');
 
 const User = model('User', new Schema({
   name: { type: String, required: true },
-  role: { type: String, enum: ['student', 'teacher'], default: 'student' },
+  role: { type: String, enum: ['student', 'teacher', 'staff'], default: 'student' },   // staff = funcionárias do bar (terminal)
   roleLabel: { type: String, default: 'Estudante' },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   avatar: { type: String, default: '', trim: true },   // URL ou nome do ficheiro em ProfilePictureUser/
@@ -32,6 +32,8 @@ const Order = model('Order', new Schema({
   queuedAt: Number, readyAt: Number, doneAt: Number, cancelledAt: Number,   // carimbos (ms) usados no terminal
   notifiedAt: { type: Number, default: 0 },
   cancelledBy: { type: String, enum: ['student', 'staff', null], default: null },
+  cancelledByName: { type: String, default: null },        // quem anulou (nome da funcionária ou do aluno)
+  actions: [{ _id: false, action: String, by: String, at: Number }],   // o que o bar fez ao pedido e quem
 }, { timestamps: true }));
 
 const Transaction = model('Transaction', new Schema({

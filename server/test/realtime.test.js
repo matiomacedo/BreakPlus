@@ -2,7 +2,7 @@
 const { test, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { io } = require('socket.io-client');
-const { startServer, stopServer, resetData, call, login, terminal, baseUrl } = require('./helpers');
+const { startServer, stopServer, resetData, call, login, terminal, baseUrl, staff } = require('./helpers');
 
 before(startServer);
 after(stopServer);
@@ -27,7 +27,7 @@ const settle = () => new Promise((r) => setTimeout(r, 200));
 
 test('um pedido feito na app chega ao terminal e ao próprio aluno, sem polling', async () => {
   const token = await login();
-  const term = await connect({ terminalKey: process.env.TERMINAL_KEY });
+  const term = await connect({ token: await staff() });
   const mine = await connect({ token });
   const termGot = collect(term), mineGot = collect(mine);
   await call('/api/orders', { token, body: { type: 'now', items: { 1: 1 } } });
@@ -68,7 +68,6 @@ test('stock e pausa chegam a todos', async () => {
 test('sem sessão válida a ligação é recusada', async () => {
   await assert.rejects(connect({}), /unauthenticated/);
   await assert.rejects(connect({ token: 'lixo' }), /unauthenticated/);
-  await assert.rejects(connect({ terminalKey: 'errada' }), /unauthenticated/);
   const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
   await assert.rejects(connect({ token: s1.body.preToken }), /unauthenticated/);   // só a password não chega
 });

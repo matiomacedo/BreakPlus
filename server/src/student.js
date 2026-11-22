@@ -186,7 +186,7 @@ function studentRouter() {
 
   // Cancelar: só as suas reservas, até 30 min antes. Reembolsa e repõe stock.
   r.post('/orders/:n/cancel', auth, wrap(async (req, res) => {
-    const out = await cancelOrder(req.params.n, 'student', (o) => {
+    const out = await cancelOrder(req.params.n, { by: 'student', name: req.user.name }, (o) => {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });

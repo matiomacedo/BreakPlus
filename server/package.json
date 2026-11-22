@@ -6,6 +6,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "seed": "node src/seed.js",
+    "create-staff": "node src/create-staff.js",
     "test": "node --test --test-concurrency=1 'test/*.test.js'"
   },
   "dependencies": {
