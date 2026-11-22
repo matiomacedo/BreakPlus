@@ -182,7 +182,8 @@ const ACTIONS = {
     else toast('Já não é possível cancelar esta reserva');
   },
   'confirm-cancel': async (d) => {
-    const result = await Store.cancelOrder(+d.id, 'student');
+    const order = db().orders.find((o) => o.number == d.id);
+    const result = order ? await Store.cancelOrder(order._id) : { ok: false };
     closeSheet();
     toast(result.ok ? `Reserva cancelada · ${eur(result.order.total)} devolvidos` : 'Já não é possível cancelar esta reserva');
   },
@@ -324,19 +325,19 @@ function announceBarActions() {
       if (!before) continue;
       if (o.status !== before.status) {
         if (o.status === 'ready' && state.prefs.notifications) {
-          toast(`Pedido #${o.number} pronto! Levanta no balcão`, 4000);
-          notifySystem(`Pedido #${o.number} pronto!`, 'Levanta no balcão e mostra a senha.', `bp-order-${o.number}-ready`);
+          toast(`Pedido #${o.ticket} pronto! Levanta no balcão`, 4000);
+          notifySystem(`Pedido #${o.ticket} pronto!`, 'Levanta no balcão e mostra a senha.', `bp-order-${o.number}-ready`);
           if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
         } else if (o.status === 'preparing' && before.status === 'reserved') {
-          toast(`A tua reserva #${o.number} já está a ser preparada`, 3000);
-          notifySystem(`Reserva #${o.number} a preparar`, `Já estamos a preparar o teu pedido para ${o.pickupTime || 'hoje'}.`, `bp-order-${o.number}-preparing`);
+          toast(`A tua reserva #${o.ticket} já está a ser preparada`, 3000);
+          notifySystem(`Reserva #${o.ticket} a preparar`, `Já estamos a preparar o teu pedido para ${o.pickupTime || 'hoje'}.`, `bp-order-${o.number}-preparing`);
         } else if (o.status === 'cancelled' && o.cancelledBy === 'staff') {
-          toast(`Pedido #${o.number} anulado pelo bar · ${eur(o.total)} devolvidos`, 4000);
-          notifySystem(`Pedido #${o.number} anulado pelo bar`, `${eur(o.total)} devolvidos ao teu saldo.`, `bp-order-${o.number}-cancelled`);
+          toast(`Pedido #${o.ticket} anulado pelo bar · ${eur(o.total)} devolvidos`, 4000);
+          notifySystem(`Pedido #${o.ticket} anulado pelo bar`, `${eur(o.total)} devolvidos ao teu saldo.`, `bp-order-${o.number}-cancelled`);
         }
       } else if ((o.notifiedAt || 0) > before.notified && state.prefs.notifications) {
-        toast(`O bar está a chamar a senha #${o.number}`, 4000);
-        notifySystem(`Senha #${o.number} chamada`, 'Dirige-te ao balcão do bar.', `bp-order-${o.number}-call`);
+        toast(`O bar está a chamar a senha #${o.ticket}`, 4000);
+        notifySystem(`Senha #${o.ticket} chamada`, 'Dirige-te ao balcão do bar.', `bp-order-${o.number}-call`);
       }
     }
   }

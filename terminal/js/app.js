@@ -19,22 +19,22 @@ const ACTIONS = {
   'advance': (d, el) => {
     const o = orderOf(d.number);
     if (!o) return;
-    if (o.status === 'received')  return void Store.setStatus(o.number, 'preparing');
+    if (o.status === 'received')  return void Store.setStatus(o._id, 'preparing');
     if (o.status === 'preparing') {
-      Store.setStatus(o.number, 'ready');
-      return toast(`Pedido #${o.number} pronto`, `${o.customer} foi avisado na app. Chamada ativa no balcão.`);
+      Store.setStatus(o._id, 'ready');
+      return toast(`Pedido #${o.ticket} pronto`, `${o.customer} foi avisado na app. Chamada ativa no balcão.`);
     }
     // entregue: o cartão desvanece-se e depois sai da fila
     const card = el.closest('.order');
     if (card) card.classList.add('leaving');
     setTimeout(() => {
-      Store.setStatus(o.number, 'done');
-      toast(`Pedido #${o.number} entregue`, 'Passou para o histórico recente.');
+      Store.setStatus(o._id, 'done');
+      toast(`Pedido #${o.ticket} entregue`, 'Passou para o histórico recente.');
     }, card ? 280 : 0);
   },
 
   'notify': (d) => {
-    Store.notify(+d.number);
+    Store.notify(orderOf(d.number)._id);
     toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${orderOf(d.number).customer}.`);
   },
 
@@ -43,12 +43,12 @@ const ACTIONS = {
     const o = orderOf(d.number);
     if (!o) return;
     openConfirm({
-      title: `Cancelar ${o.type === 'reservation' ? 'reserva' : 'pedido'} #${o.number}?`,
+      title: `Cancelar ${o.type === 'reservation' ? 'reserva' : 'pedido'} #${o.ticket}?`,
       text: `Devolve ${eur(o.total)} a ${o.customer} e repõe o stock.`,
       okLabel: 'Cancelar e reembolsar',
       onOk: () => {
-        Store.cancelOrder(o.number);
-        toast(`#${o.number} cancelado`, `${eur(o.total)} devolvidos a ${o.customer}.`);
+        Store.cancelOrder(o._id);
+        toast(`#${o.ticket} cancelado`, `${eur(o.total)} devolvidos a ${o.customer}.`);
       },
     });
   },
@@ -58,12 +58,12 @@ const ACTIONS = {
     const o = orderOf(d.number);
     if (!o) return;
     openConfirm({
-      title: `Anular pedido #${o.number}?`,
+      title: `Anular pedido #${o.ticket}?`,
       text: `Devolve ${eur(o.total)} a ${o.customer} e repõe os produtos no stock.`,
       okLabel: 'Anular pedido',
       onOk: () => {
-        Store.cancelOrder(o.number);
-        toast(`Pedido #${o.number} anulado`, `${eur(o.total)} devolvidos · stock reposto.`);
+        Store.cancelOrder(o._id);
+        toast(`Pedido #${o.ticket} anulado`, `${eur(o.total)} devolvidos · stock reposto.`);
       },
     });
   },
@@ -71,8 +71,8 @@ const ACTIONS = {
   /* --- Reservas --- */
   'start-reservation': (d) => {
     const o = orderOf(d.number);
-    Store.setStatus(+d.number, 'preparing');
-    toast(`Reserva #${d.number} na fila`, `${o.customer} foi avisado de que a preparação começou.`);
+    Store.setStatus(o._id, 'preparing');
+    toast(`Reserva #${o.ticket} na fila`, `${o.customer} foi avisado de que a preparação começou.`);
   },
 
   /* --- Stock --- */
@@ -137,7 +137,7 @@ document.addEventListener('change', (event) => {
   const input = event.target.closest('.speed-input');
   if (!input) return;
   ui.dragging = false;
-  Store.setStatus(+input.dataset.number, STEPS[+input.value]);
+  Store.setStatus(orderOf(input.dataset.number)._id, STEPS[+input.value]);
 });
 
 document.addEventListener('pointerdown', (event) => { if (event.target.closest('.speed-input')) ui.dragging = true; });

@@ -42,7 +42,7 @@ test('um aluno nunca recebe eventos dos pedidos de outro aluno', async () => {
   const anaSocket = await connect({ token: ana });
   const anaGot = collect(anaSocket);
   const r = await call('/api/orders', { token: goncalo, body: { type: 'now', items: { 1: 1 } } });
-  await terminal(`/orders/${r.body.order.number}/status`, { body: { status: 'ready' } });
+  await terminal(`/orders/${r.body.order._id}/status`, { body: { status: 'ready' } });
   await call('/api/wallet/topup', { token: goncalo, body: { amount: 5 } });
   await settle();
   assert.deepEqual(anaGot, []);
@@ -52,7 +52,7 @@ test('o terminal avisa o dono do pedido quando muda o estado', async () => {
   const token = await login();
   const r = await call('/api/orders', { token, body: { type: 'now', items: { 1: 1 } } });
   const got = collect(await connect({ token }));
-  await terminal(`/orders/${r.body.order.number}/status`, { body: { status: 'preparing' } });
+  await terminal(`/orders/${r.body.order._id}/status`, { body: { status: 'preparing' } });
   await settle();
   assert.deepEqual(got, [{ type: 'order' }]);
 });

@@ -26,9 +26,11 @@ Os pedidos e os cancelamentos mexem no stock, no saldo e no histórico numa **tr
 
 | Quem | Rotas | Proteção |
 |---|---|---|
-| Alunos/docentes | `POST /api/auth/login`, `POST /api/auth/pin`, `GET /api/auth/me`, `GET /api/state`, `POST /api/orders`, `POST /api/orders/:n/cancel`, `POST /api/wallet/topup`, `GET /api/menu`, `GET /api/orders/mine` | token de sessão (password + PIN) |
-| Terminal | `GET /api/terminal/state`, `POST /api/terminal/orders/:n/status`, `.../notify`, `.../cancel`, `POST /api/terminal/stock/:id`, `POST /api/terminal/paused` | token de sessão de uma conta `staff` (outro papel → 403) |
+| Alunos/docentes | `POST /api/auth/login`, `POST /api/auth/pin`, `GET /api/auth/me`, `GET /api/state`, `POST /api/orders`, `POST /api/orders/:id/cancel`, `POST /api/wallet/topup`, `GET /api/menu`, `GET /api/orders/mine` | token de sessão (password + PIN) |
+| Terminal | `GET /api/terminal/state`, `POST /api/terminal/orders/:id/status`, `.../notify`, `.../cancel`, `POST /api/terminal/stock/:id`, `POST /api/terminal/paused` | token de sessão de uma conta `staff` (outro papel → 403) |
 | Tempo real | Socket.IO em `/socket.io/`: evento `changed` `{ type }` depois de cada escrita (a app volta a pedir o seu `/state`). Sala por aluno (só os seus pedidos/saldo) e sala do terminal (todos) | `auth: { token }` (sessão completa; contas `staff` entram na sala do terminal) |
+
+`:id` é o identificador único do pedido (`_id`). A senha mostrada ao aluno e no balcão (`ticket`) recomeça em 1 todos os dias (Europe/Lisbon), por isso repete-se entre dias e nunca é usada nas rotas.
 
 ## Código
 

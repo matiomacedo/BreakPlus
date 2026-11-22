@@ -171,13 +171,17 @@ function studentRouter() {
       if (!total) throw fail('empty');
       const u = await User.findOneAndUpdate({ _id: req.user._id, balance: { $gte: total } }, { $inc: { balance: -total } }, { session, new: true });
       if (!u) throw fail('balance', {}, 402);
+      // Número único (sequencial) + senha do dia: a primeira senha de cada dia (Lisboa) é 1.
+      const today = lisbonDateKey();
       const s2 = await barSettings({ $inc: { lastNumber: 1 } }, session);
+      const ticket = s2.ticketDay === today ? s2.lastTicket + 1 : 1;
+      await barSettings({ ticketDay: today, lastTicket: ticket }, session);
       const [order] = await Order.create([{
-        number: s2.lastNumber, user: u._id, customer: u.name, role: u.roleLabel, type, items, total,
+        number: s2.lastNumber, ticket, ticketDay: today, user: u._id, customer: u.name, role: u.roleLabel, type, items, total,
         status: reservation ? 'reserved' : 'received',
         ...(reservation ? { pickupKey, pickupTime, pickupAt } : {}), queuedAt: type === 'now' ? Date.now() : undefined,
       }], { session });
-      await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number }], { session });
+      await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number, ticket }], { session });
       return order;
     });
     realtime.orderChanged(req.user._id);
@@ -185,8 +189,8 @@ function studentRouter() {
   }));
 
   // Cancelar: só as suas reservas, até 30 min antes. Reembolsa e repõe stock.
-  r.post('/orders/:n/cancel', auth, wrap(async (req, res) => {
-    const out = await cancelOrder(req.params.n, { by: 'student', name: req.user.name }, (o) => {
+  r.post('/orders/:id/cancel', auth, wrap(async (req, res) => {
+    const out = await cancelOrder(req.params.id, { by: 'student', name: req.user.name }, (o) => {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
