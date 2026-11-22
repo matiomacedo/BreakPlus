@@ -44,9 +44,16 @@ async function slotsToday() {
   return { key, full: full.map((s) => s.time) };
 }
 
+/** Garante que o contador da hora existe, FORA da transação: duas primeiras reservas em paralelo para a mesma
+    hora não podem chocar no índice único dentro da transação (E11000 não é repetido sozinho → erro 500). */
+async function ensureSlot(key, time) {
+  try { await Slot.updateOne({ key, time }, { $setOnInsert: { count: 0 } }, { upsert: true }); } catch (e) {
+    if (e.code !== 11000) throw e;                         // outro pedido criou-o ao mesmo tempo: já existe
+  }
+}
+
 /** Ocupa um lugar na hora pedida, dentro da transação do pedido. Hora cheia → recusa. */
 async function takeSlot(key, time, session) {
-  await Slot.updateOne({ key, time }, { $setOnInsert: { count: 0 } }, { upsert: true, session });
   const slot = await Slot.findOneAndUpdate({ key, time, count: { $lt: RESERVATION.slotCapacity } }, { $inc: { count: 1 } }, { session, new: true });
   if (!slot) throw fail('slot_full', {}, 409);
 }
@@ -186,6 +193,7 @@ function studentRouter() {
     const why = reservation ? pickupError(pickupKey, pickupTime) : null;
     if (why) throw fail(why);
     const pickupAt = reservation ? lisbonEpoch(pickupKey, pickupTime) : null;
+    if (reservation) await ensureSlot(pickupKey, pickupTime);
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');

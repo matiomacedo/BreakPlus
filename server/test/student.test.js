@@ -151,6 +151,18 @@ test('duas reservas ao mesmo tempo para o último lugar: só uma entra', async (
   assert.equal(results.find((r) => !r.body.ok).body.reason, 'slot_full');
 });
 
+test('várias primeiras reservas em paralelo para uma hora nova: nenhuma dá erro 500', async (t) => {
+  const capacity = RESERVATION.slotCapacity;
+  RESERVATION.slotCapacity = 2;
+  t.after(() => { RESERVATION.slotCapacity = capacity; });
+  const tokens = [await login(), await login('ana@demo.pt', 'demo1234', '4321')];
+  for (const token of tokens) await call('/api/wallet/topup', { token, body: { amount: 50 } });   // saldo para todas as reservas
+  for (const time of ['11:00', '11:30', '12:00', '13:00', '13:30']) {      // cada hora ainda não tem contador
+    const rs = await Promise.all([...tokens, ...tokens].map((token) => call('/api/orders', { token, body: reservation(time, { 1: 1 }) })));
+    assert.deepEqual(rs.map((r) => r.status).sort(), [200, 200, 409, 409], time);
+  }
+});
+
 test('cancelar uma reserva liberta o lugar na hora', async (t) => {
   const capacity = RESERVATION.slotCapacity;
   RESERVATION.slotCapacity = 1;
