@@ -27,10 +27,12 @@ const PERIODS    = ['Todos', 'Destaques', 'Almoço', 'Jantar', 'Bar'];
 /* Pratos.
    - image:    caminho da foto, relativo à raiz do projeto (pasta images/).
                Se o ficheiro não existir, aparece um ícone neutro no lugar.
+   - tag:      etiqueta na foto (opcional). "Mais pedido" não se escreve aqui: vem dos pedidos reais
+               (servidor) e aparece nos produtos mais pedidos dos últimos dias.
    - tagStyle: 'green' para a etiqueta verde (omitir = etiqueta dourada).
    - meta:     texto no canto da imagem (tempo, volume...). Opcional.
    - badges:   [{ text, style }] — style: 'veg' (verde), 'warn' (amarelo) ou omitido.
-   - periods:  em que filtros de "Período" o prato aparece. */
+   - periods:  em que filtros de "Período" o prato aparece ("Destaques" = os mais pedidos, calculado). */
 const ITEMS = [
   {
     id: 1,
@@ -43,10 +45,9 @@ const ITEMS = [
     description: 'Pão alentejano tostado, queijo flamengo derretido e fiambre da perna.',
     price: 2.20,
     priceLabel: 'Bar Estudante',
-    tag: 'Mais pedido',
     meta: '~4 min',
     badges: [{ text: 'Pão Alentejano' }, { text: 'Favorito' }],
-    periods: ['Destaques', 'Almoço', 'Bar'],
+    periods: ['Almoço', 'Bar'],
   },
   {
     id: 2,
@@ -62,7 +63,7 @@ const ITEMS = [
     tag: 'Fornada recente',
     tagStyle: 'green',
     badges: [{ text: 'Folhado' }, { text: 'Na hora' }],
-    periods: ['Destaques', 'Bar'],
+    periods: ['Bar'],
   },
   {
     id: 3,
@@ -94,7 +95,7 @@ const ITEMS = [
     tagStyle: 'green',
     meta: '300 ml',
     badges: [{ text: 'Natural', style: 'veg' }, { text: 'Sem açúcar adicionado' }],
-    periods: ['Destaques', 'Almoço', 'Jantar', 'Bar'],
+    periods: ['Almoço', 'Jantar', 'Bar'],
   },
   {
     id: 5,
@@ -124,7 +125,7 @@ const ITEMS = [
     priceLabel: 'Preço Combo',
     tag: 'Combo económico',
     badges: [{ text: 'Delta Cafés' }, { text: 'Canela & Açúcar', style: 'warn' }],
-    periods: ['Destaques', 'Almoço'],
+    periods: ['Almoço'],
   },
 ];
 

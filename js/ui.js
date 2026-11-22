@@ -158,7 +158,8 @@ function productImageHTML(item, stock) {
     <div class="pic">
       <span class="pic-fallback" aria-hidden="true"><svg class="ic"><use href="#i-utensils"/></svg></span>
       ${img}
-      <span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>
+      ${isPopular(item.id) ? '<span class="tag">Mais pedido</span>'
+        : item.tag ? `<span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>` : ''}
       ${meta && stock > 0 ? `<span class="meta">${escapeHtml(meta)}</span>` : ''}
       ${stock === 0 ? '<span class="soldout-badge">Esgotado</span>' : ''}
     </div>`;
