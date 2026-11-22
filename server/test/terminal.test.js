@@ -1,7 +1,7 @@
 /* Terminal do bar: exige a sessão de uma funcionária (papel "staff"). */
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, stopServer, resetData, call, login, terminal } = require('./helpers');
+const { startServer, stopServer, resetData, call, login, terminal, staff } = require('./helpers');
 
 before(startServer);
 after(stopServer);
@@ -44,6 +44,20 @@ test('um aluno ou docente com sessão não consegue usar nenhuma rota do termina
   }
   const s = await terminal('/state');
   assert.deepEqual([s.body.paused, s.body.stock[1], s.body.orders.every((o) => o.status === 'received')], [false, 6, true]);   // 2 pedidos de 2 tostas; nada mudou
+});
+
+test('a sessão de uma funcionária não serve para as rotas da app dos alunos (só /auth/me)', async () => {
+  const token = await staff();
+  for (const [path, body] of [
+    ['/api/state', undefined], ['/api/menu', undefined], ['/api/slots', undefined], ['/api/orders/mine', undefined],
+    ['/api/orders', { type: 'now', items: { 1: 1 } }], ['/api/wallet/topup', { amount: 50 }],
+    ['/api/push/subscribe', { subscription: { endpoint: 'https://push.example/x', keys: { p256dh: 'a', auth: 'b' } } }],
+  ]) {
+    const r = await call(path, { token, body });
+    assert.deepEqual([path, r.status, r.body.reason], [path, 403, 'forbidden']);
+  }
+  assert.equal((await call('/api/auth/me', { token })).body.user.role, 'staff');
+  assert.equal((await terminal('/state')).body.stock[1], 10);              // nada foi pedido
 });
 
 test('a funcionária entra com o mesmo login em 2 passos e o papel "staff"', async () => {

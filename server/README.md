@@ -26,7 +26,7 @@ Os pedidos e os cancelamentos mexem no stock, no saldo e no histórico numa **tr
 
 | Quem | Rotas | Proteção |
 |---|---|---|
-| Alunos/docentes | `POST /api/auth/login`, `POST /api/auth/pin`, `GET /api/auth/me`, `GET /api/state`, `POST /api/orders`, `POST /api/orders/:id/cancel`, `GET /api/slots`, `POST /api/wallet/topup`, `GET /api/menu`, `GET /api/orders/mine` | token de sessão (password + PIN) |
+| Alunos/docentes | `POST /api/auth/login`, `POST /api/auth/pin`, `GET /api/auth/me`, `GET /api/state`, `POST /api/orders`, `POST /api/orders/:id/cancel`, `GET /api/slots`, `POST /api/wallet/topup`, `GET /api/menu`, `GET /api/orders/mine` | token de sessão (password + PIN) de um aluno/docente; `GET /api/auth/me` aceita qualquer papel |
 | Terminal | `GET /api/terminal/state`, `POST /api/terminal/orders/:id/status`, `.../notify`, `.../cancel`, `POST /api/terminal/stock/:id`, `POST /api/terminal/paused` | token de sessão de uma conta `staff` (outro papel → 403) |
 | Tempo real | Socket.IO em `/socket.io/`: evento `changed` `{ type }` depois de cada escrita (a app volta a pedir o seu `/state`). Sala por aluno (só os seus pedidos/saldo) e sala do terminal (todos) | `auth: { token }` (sessão completa; contas `staff` entram na sala do terminal). Pedidos: `order` ao dono e ao terminal, `queue` (sem dados) aos outros |
 

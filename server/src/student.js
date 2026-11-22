@@ -1,8 +1,9 @@
-/* Rotas da app dos alunos/docentes (montadas em /api). Todas, exceto o login, pedem sessão completa. */
+/* Rotas da app dos alunos/docentes (montadas em /api). Todas, exceto o login, pedem sessão completa
+   de um aluno/docente; /auth/me serve qualquer papel (o terminal também valida a sessão aqui). */
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { User, Product, Order, Transaction, PushSubscription, Slot } = require('./models');
-const { verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
+const { verify, sign, auth, studentAuth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
 const { r2, barSettings, queueStats, popularItems, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
@@ -105,7 +106,7 @@ function studentRouter() {
   }));
 
   // Guarda a subscrição deste dispositivo (endpoint + chaves do browser).
-  r.post('/push/subscribe', auth, wrap(async (req, res) => {
+  r.post('/push/subscribe', studentAuth, wrap(async (req, res) => {
     const sub = req.body && req.body.subscription;
     const endpoint = sub && typeof sub.endpoint === 'string' ? sub.endpoint.trim() : '';
     const p256dh = sub && sub.keys && typeof sub.keys.p256dh === 'string' ? sub.keys.p256dh : '';
@@ -120,19 +121,19 @@ function studentRouter() {
   }));
 
   // Remove a subscrição deste dispositivo (avisos desligados ou conta terminada).
-  r.post('/push/unsubscribe', auth, wrap(async (req, res) => {
+  r.post('/push/unsubscribe', studentAuth, wrap(async (req, res) => {
     const endpoint = String((req.body && req.body.endpoint) || '');
     if (endpoint) await PushSubscription.deleteOne({ endpoint, user: req.user._id });
     res.json({ ok: true });
   }));
 
   // Diagnóstico: quantos dispositivos deste aluno estão subscritos.
-  r.get('/push/status', auth, wrap(async (req, res) => {
+  r.get('/push/status', studentAuth, wrap(async (req, res) => {
     res.json({ ok: true, subscriptions: await PushSubscription.countDocuments({ user: req.user._id }) });
   }));
 
   // Teste real: o servidor envia o aviso (confirma o Web Push com a app fechada).
-  r.post('/push/test', auth, wrap(async (req, res) => {
+  r.post('/push/test', studentAuth, wrap(async (req, res) => {
     const sent = await push.sendToUser(req.user._id, {
       title: 'Break+ESTG · teste',
       body: 'Se vês isto com a app fechada, o Web Push está a funcionar.',
@@ -144,7 +145,7 @@ function studentRouter() {
   /* ---------- Dados ---------- */
 
   // Estado da app: só os pedidos e a carteira de quem tem sessão + fila global (tempo de espera) + "Mais pedido"
-  r.get('/state', auth, wrap(async (req, res) => {
+  r.get('/state', studentAuth, wrap(async (req, res) => {
     const [products, set, orders, txs, stats, popular, slots] = await Promise.all([
       Product.find(), barSettings(),
       Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
@@ -160,17 +161,17 @@ function studentRouter() {
   }));
 
   // Ocupação das horas de reserva de hoje (as reservas são só para o dia atual)
-  r.get('/slots', auth, wrap(async (_req, res) => res.json({ ok: true, ...(await slotsToday()) })));
+  r.get('/slots', studentAuth, wrap(async (_req, res) => res.json({ ok: true, ...(await slotsToday()) })));
 
-  r.get('/menu', auth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
-  r.get('/orders/mine', auth, wrap(async (req, res) => {
+  r.get('/menu', studentAuth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
+  r.get('/orders/mine', studentAuth, wrap(async (req, res) => {
     const orders = await Order.find({ user: req.user._id }).sort({ number: -1 }).populate('user', USER_FIELDS);
     res.json(orders.map((o) => orderOut(o, req.user._id)));
   }));
 
   /* ---------- Pedidos ---------- */
 
-  r.post('/orders', auth, wrap(async (req, res) => {
+  r.post('/orders', studentAuth, wrap(async (req, res) => {
     const { type, pickupKey, pickupTime } = req.body;
     if (!['now', 'reservation'].includes(type)) throw fail('type');
     const items = parseItems(req.body.items);
@@ -213,7 +214,7 @@ function studentRouter() {
   }));
 
   // Cancelar: só as suas reservas, até 30 min antes. Reembolsa e repõe stock.
-  r.post('/orders/:id/cancel', auth, wrap(async (req, res) => {
+  r.post('/orders/:id/cancel', studentAuth, wrap(async (req, res) => {
     const out = await cancelOrder(req.params.id, { by: 'student', name: req.user.name }, (o) => {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
@@ -223,7 +224,7 @@ function studentRouter() {
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 
-  r.post('/wallet/topup', auth, wrap(async (req, res) => {
+  r.post('/wallet/topup', studentAuth, wrap(async (req, res) => {
     const amount = r2(+req.body.amount);
     if (!(amount > 0 && amount <= 100)) throw fail('amount');
     const u = await User.findByIdAndUpdate(req.user._id, { $inc: { balance: amount } }, { new: true });

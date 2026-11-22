@@ -31,11 +31,14 @@ const auth = async (req, res, next) => {
   } catch { res.status(401).json({ ok: false, reason: 'unauthenticated' }); }
 };
 
-// Middleware do terminal: sessão completa de uma funcionária do bar (papel "staff")
-const staffAuth = (req, res, next) => auth(req, res, () => {
-  if (req.user.role !== 'staff') return res.status(403).json({ ok: false, reason: 'forbidden' });
+/** Sessão completa de um dos papéis indicados; outro papel → 403. */
+const authAs = (roles) => (req, res, next) => auth(req, res, () => {
+  if (!roles.includes(req.user.role)) return res.status(403).json({ ok: false, reason: 'forbidden' });
   next();
 });
+// Terminal: só funcionárias do bar. App: só alunos e docentes (as funcionárias não pedem nem carregam saldo).
+const staffAuth = authAs(['staff']);
+const studentAuth = authAs(['student', 'teacher']);
 
 const lockedMin = (u) => (u.lockUntil && u.lockUntil > new Date() ? Math.ceil((u.lockUntil - new Date()) / 60000) : 0);
 async function registerFail(u) {
@@ -46,4 +49,4 @@ async function registerFail(u) {
 }
 const publicUser = (u) => ({ id: u._id, name: u.name, role: u.role, roleLabel: u.roleLabel, email: u.email, avatar: u.avatar || '' });
 
-module.exports = { hash, verify, sign, auth, staffAuth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS };
+module.exports = { hash, verify, sign, auth, staffAuth, studentAuth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS };
