@@ -3,7 +3,7 @@ const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { startServer, stopServer, resetData, call, login } = require('./helpers');
 const { clock, lisbonDateKey, lisbonEpoch } = require('../src/time');
-const { pickupAtFor } = require('../src/student');
+const { pickupAtFor, RESERVATION } = require('../src/student');
 
 const realNow = clock.now;
 before(startServer);
@@ -95,6 +95,47 @@ test('num dia novo a senha recomeça em 1', async () => {
   assert.deepEqual([r.body.order.ticket, r.body.order.number], [1, 401]);
   const s = await call('/api/state', { token });
   assert.equal(s.body.wallet.transactions[0].ticket, 1);               // o movimento mostra a senha
+});
+
+/* ---------- Capacidade das horas de reserva ---------- */
+
+test('com capacidade 2, a 3.ª reserva para a mesma hora é recusada e a hora aparece esgotada', async (t) => {
+  const capacity = RESERVATION.slotCapacity;
+  RESERVATION.slotCapacity = 2;
+  t.after(() => { RESERVATION.slotCapacity = capacity; });
+  const [goncalo, ana] = [await login(), await login('ana@demo.pt', 'demo1234', '4321')];
+  assert.equal((await call('/api/orders', { token: goncalo, body: reservation('12:30') })).body.ok, true);
+  assert.equal((await call('/api/orders', { token: ana, body: reservation('12:30') })).body.ok, true);
+  const third = await call('/api/orders', { token: goncalo, body: reservation('12:30') });
+  assert.deepEqual([third.status, third.body.reason], [409, 'slot_full']);
+  assert.equal((await call('/api/state', { token: goncalo })).body.wallet.balance, 12.5 - 2.2);   // a 3.ª não descontou nada
+
+  const slots = await call('/api/slots', { token: goncalo });
+  assert.deepEqual([slots.body.key, slots.body.full], [todayKey(), ['12:30']]);
+  assert.deepEqual((await call('/api/state', { token: ana })).body.slots.full, ['12:30']);
+  assert.equal((await call('/api/orders', { token: goncalo, body: reservation('13:00') })).body.ok, true);   // outra hora continua livre
+});
+
+test('duas reservas ao mesmo tempo para o último lugar: só uma entra', async (t) => {
+  const capacity = RESERVATION.slotCapacity;
+  RESERVATION.slotCapacity = 1;
+  t.after(() => { RESERVATION.slotCapacity = capacity; });
+  const [goncalo, ana] = [await login(), await login('ana@demo.pt', 'demo1234', '4321')];
+  const results = await Promise.all([goncalo, ana].map((token) => call('/api/orders', { token, body: reservation('12:30') })));
+  assert.deepEqual(results.map((r) => r.body.ok === true).sort(), [false, true]);
+  assert.equal(results.find((r) => !r.body.ok).body.reason, 'slot_full');
+});
+
+test('cancelar uma reserva liberta o lugar na hora', async (t) => {
+  const capacity = RESERVATION.slotCapacity;
+  RESERVATION.slotCapacity = 1;
+  t.after(() => { RESERVATION.slotCapacity = capacity; });
+  const token = await login();
+  const first = (await call('/api/orders', { token, body: reservation('12:30') })).body.order;
+  assert.deepEqual((await call('/api/slots', { token })).body.full, ['12:30']);
+  await call(`/api/orders/${first._id}/cancel`, { token, body: {} });
+  assert.deepEqual((await call('/api/slots', { token })).body.full, []);
+  assert.equal((await call('/api/orders', { token, body: reservation('12:30') })).body.ok, true);
 });
 
 /* ---------- "Mais pedido" ---------- */

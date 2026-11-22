@@ -85,6 +85,7 @@ function terminalRouter() {
   r.post('/orders/:id/cancel', wrap(async (req, res) => {
     const o = await cancelOrder(req.params.id, { by: 'staff', name: req.user.name });
     realtime.orderChanged(o.user);
+    if (o.type === 'reservation') realtime.barChanged('slots');
     push.notifyUser(o.user, {
       title: `Pedido #${ticketOf(o)} cancelado`,
       body: 'O valor foi devolvido ao teu saldo.',

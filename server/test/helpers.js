@@ -31,9 +31,9 @@ async function stopServer() {
 
 /** Base de dados limpa com 2 produtos, 2 alunos, 1 funcionária do bar e as definições do bar. */
 async function resetData() {
-  const { User, Product, Order, Transaction, PushSubscription, Setting } = require('../src/models');
+  const { User, Product, Order, Transaction, PushSubscription, Setting, Slot } = require('../src/models');
   const { hash } = require('../src/auth');
-  await Promise.all([User, Product, Order, Transaction, PushSubscription, Setting].map((m) => m.deleteMany({})));
+  await Promise.all([User, Product, Order, Transaction, PushSubscription, Setting, Slot].map((m) => m.deleteMany({})));
   await Product.insertMany([
     { itemId: 1, name: 'Tosta', price: 2.2, stock: 10 },
     { itemId: 2, name: 'Croissant', price: 1.6, stock: 3 },

@@ -152,6 +152,7 @@ const ACTIONS = {
         return toast(`Já não há ${findItem(result.itemId).name} suficiente`);
       }
       if (result.reason === 'paused') { syncCheckout(); return toast('O bar acabou de pausar os pedidos na hora'); }
+      if (result.reason === 'slot_full') { ensureCheckoutDay(); renderSlots(); syncCheckout(); return toast('Essa hora acabou de esgotar. Escolhe outra'); }
       if (result.reason === 'pickup') { renderSlots(); syncCheckout(); return toast(`Só podes reservar para hoje, até às ${RESERVATION.todayUntil}`); }
       return toast('Não foi possível concluir o pedido');
     }

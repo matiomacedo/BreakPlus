@@ -109,10 +109,10 @@ const STATUS_TEXT = {
 
 /* ---------- Horários das reservas ---------- */
 
-/** Demonstração: alguns horários aparecem "esgotados" (em produção viria do servidor). */
+/** Hora esgotada: já tem RESERVATION.slotCapacity reservas (dados do servidor, GET /api/state → slots). */
 function isSlotFull(key, time) {
-  const hash = [...(key + time)].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 7);
-  return hash % 6 === 0;
+  const slots = db().slots;
+  return !!slots && slots.key === key && slots.full.includes(time);
 }
 
 /** Horários de um dia: [{ time: '12:30', full: false }, ...] */
