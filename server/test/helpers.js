@@ -16,11 +16,15 @@ async function startServer() {
   await mongoose.connect(process.env.MONGODB_URI);
   const { createApp } = require('../src/app');
   const { loadConfig } = require('../src/config');
-  await new Promise((resolve) => { server = createApp(loadConfig()).listen(0, resolve); });
+  const realtime = require('../src/realtime');
+  server = require('http').createServer(createApp(loadConfig()));
+  realtime.attach(server, loadConfig());
+  await new Promise((resolve) => server.listen(0, resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 }
 
 async function stopServer() {
+  server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
   await mongoose.disconnect();
   await replSet.stop();
@@ -66,4 +70,7 @@ async function login(email = 'aluno@demo.pt', password = 'demo1234', pin = '1234
 const terminal = (path, opts = {}) =>
   call('/api/terminal' + path, { ...opts, headers: { 'X-Terminal-Key': process.env.TERMINAL_KEY, ...opts.headers } });
 
-module.exports = { startServer, stopServer, resetData, call, login, terminal };
+/** Endereço do servidor de teste (para ligar sockets). */
+const baseUrl = () => base;
+
+module.exports = { baseUrl, startServer, stopServer, resetData, call, login, terminal };

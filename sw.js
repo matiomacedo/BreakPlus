@@ -14,7 +14,7 @@
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v18';
+const CACHE_VERSION = 'breakplus-v19';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 
@@ -127,7 +127,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Dados e sessão continuam sempre a vir da rede (a app trata da falta de ligação).
-  if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(navigationHandler(request));

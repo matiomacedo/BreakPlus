@@ -7,6 +7,7 @@ const Store = createStore({
   request: Auth.api,
   statePath: '/api/state',
   cacheKey: 'bp_state_student',
+  socketAuth: () => ({ token: Auth.token() }),
   onConnection: (ok, reason) => setConnection(ok, reason),
   actions: ({ post, withOrder }) => ({
     // A hora de levantamento (pickupAt) é calculada no servidor a partir do dia e da hora.

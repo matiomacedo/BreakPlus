@@ -24,7 +24,7 @@ Duas apps que falam com a mesma API (Express + MongoDB, em `server/`):
 
    A origem das páginas (ex.: `http://localhost:8000`) tem de estar em `CORS_ORIGINS` no `server/.env`.
 4. Abre as duas apps (ver a tabela acima). Contas de demonstração: `aluno@demo.pt` / `demo1234` / PIN `1234` e `ana@demo.pt` / `demo1234` / PIN `4321`.
-5. Faz um pedido na app dos alunos: aparece no terminal em ~2,5 s. No terminal avança o pedido (Recebido → A preparar → Pronto → Entregue): o aluno recebe os avisos.
+5. Faz um pedido na app dos alunos: aparece logo no terminal (Socket.IO). No terminal avança o pedido (Recebido → A preparar → Pronto → Entregue): o aluno recebe os avisos.
 
 > Não abras os ficheiros com duplo clique (`file://`): a API só aceita pedidos das origens em `CORS_ORIGINS`.
 > O terminal acrescenta sozinho a `/` final se o abrires como `/terminal` (sem ela, os caminhos relativos do CSS/JS apontavam para a raiz).
@@ -180,7 +180,7 @@ O toast dentro da app continua a existir, mas cada mudança de pedido aparece ta
 - A preferência **Aviso de pedido pronto** (ecrã **Mais**) fica guardada em `localStorage` e já não se perde ao recarregar; controla também os avisos de senha chamada e anulação.
 - Ao ligar a preferência, o browser pede permissão. Se a preferência já vinha ligada, o pedido é feito no primeiro toque na app.
 - Avisos: pedido **pronto**, bar a **chamar a senha** e pedido **anulado pelo bar** (com o valor devolvido).
-- Com a app aberta, os avisos reagem às atualizações da `Store` (`shared/api.js`, polling de 2,5 s) e são mostrados pelo service worker.
+- Com a app aberta, os avisos reagem às atualizações da `Store` (`shared/api.js`, avisos em tempo real por Socket.IO; polling de 2,5 s só sem ligação) e são mostrados pelo service worker.
 
 ### App fechada (Web Push)
 
@@ -218,7 +218,7 @@ shared/
   data.js             pratos (com complexidade/tempo), bar e regras das reservas (o servidor também lê este ficheiro)
   queue.js            fila com prioridade justa: espera, complexidade, quantidade e agrupamento
   util.js             funções puras (formatação, datas, totais)
-  api.js              requestJson() + createStore(): estado do servidor, atualizado de 2,5 em 2,5 s
+  api.js              requestJson() + createStore(): estado do servidor, atualizado por Socket.IO (polling de recurso)
   tokens.css          cores e sombras comuns às duas apps
   boot.css            ecrã de carregamento inicial (spinner) das duas apps
   nozoom.js           bloqueia o zoom por gesto nas duas apps (telemóvel/PWA)
