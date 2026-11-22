@@ -200,6 +200,38 @@ test('cada ação do terminal fica registada com o nome da funcionária', async 
   assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['ready', 'Rosa Ferreira'], ['notified', 'Rosa Ferreira']]);
 });
 
+/* ---------- Concorrência e registo de ações ---------- */
+
+test('mudar o estado de um pedido que mudou entretanto (ex.: cancelado e reembolsado) → 409, sem o desfazer', async () => {
+  const { Order } = require('../src/models');
+  const o = await placeNow(await login(), { 1: 1 });
+  const original = Order.findOneAndUpdate;
+  Order.findOneAndUpdate = function (filter, ...rest) {                 // outra funcionária avançou-o mesmo antes
+    Order.findOneAndUpdate = original;
+    return Order.updateOne({ _id: o._id }, { status: 'preparing' }).then(() => original.call(this, filter, ...rest));
+  };
+  const r = await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
+  assert.deepEqual([r.status, r.body.reason], [409, 'conflict']);
+  assert.equal((await Order.findById(o._id)).status, 'preparing');
+});
+
+test('chamar a senha de um pedido cancelado não muda nada (404)', async () => {
+  const { Order } = require('../src/models');
+  const o = await placeNow(await login(), { 1: 1 });
+  await terminal(`/orders/${o._id}/cancel`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.equal(r.status, 404);
+  const saved = await Order.findById(o._id);
+  assert.deepEqual([saved.notifiedAt, saved.actions.map((a) => a.action)], [0, ['cancelled']]);
+});
+
+test('o registo de ações guarda só as últimas 50', async () => {
+  const o = await placeNow(await login(), { 1: 1 });
+  let r;
+  for (let i = 0; i < 55; i++) r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.equal(r.body.order.actions.length, 50);
+});
+
 /* ---------- Senha do dia ---------- */
 
 test('pedidos de dias diferentes com a mesma senha não se confundem (as rotas usam o id único)', async () => {

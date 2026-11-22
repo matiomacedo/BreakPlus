@@ -33,6 +33,10 @@ async function queueStats() {
 /** Pedido pelo identificador único (_id). Id mal formado → null (como um pedido que não existe). */
 const findOrder = (id, session = null) => (mongoose.isValidObjectId(id) ? Order.findById(id).session(session) : Promise.resolve(null));
 
+/** Registo das ações do bar num pedido: guarda só as últimas MAX_ACTIONS (ex.: chamar a senha muitas vezes). */
+const MAX_ACTIONS = 50;
+const pushAction = (entry) => ({ actions: { $each: [entry], $slice: -MAX_ACTIONS } });
+
 /** Número a mostrar (senha do dia; os pedidos antigos, sem senha, mostram o número sequencial). */
 const ticketOf = (o) => o.ticket ?? o.number;
 
@@ -67,9 +71,9 @@ const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session)
   await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
   await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number, ticket: o.ticket }], { session });
   o.status = 'cancelled'; o.cancelledBy = by; o.cancelledByName = name; o.cancelledAt = Date.now();
-  if (by === 'staff') o.actions.push({ action: 'cancelled', by: name, at: o.cancelledAt });
+  if (by === 'staff') { o.actions.push({ action: 'cancelled', by: name, at: o.cancelledAt }); o.actions.splice(0, o.actions.length - MAX_ACTIONS); }
   await o.save({ session });
   return o;
 });
 
-module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, findOrder, ticketOf, cancelOrder };
+module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, findOrder, pushAction, ticketOf, cancelOrder };
