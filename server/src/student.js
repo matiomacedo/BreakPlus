@@ -19,17 +19,22 @@ const orderOut = (o, uid) => {
 };
 
 /**
- * Hora de levantamento (ms) calculada no servidor, em Europe/Lisbon (o `pickupAt` do cliente é ignorado).
- * null se não for hoje, se estiver fora de BAR.open–RESERVATION.todayUntil, fora da grelha de
- * RESERVATION.stepMin ou com menos de RESERVATION.minLeadMin de antecedência.
+ * Porque é que a hora de levantamento não serve (Europe/Lisbon), ou null se servir:
+ * 'pickup' se não for hoje, se estiver fora de BAR.open–RESERVATION.todayUntil ou da grelha de RESERVATION.stepMin;
+ * 'lead' se tiver menos de RESERVATION.minLeadMin de antecedência. A antecedência conta-se em minutos
+ * inteiros, como a app ao mostrar as horas (às 12:00:40 a hora 12:30 ainda é válida).
  */
-function pickupAtFor(pickupKey, pickupTime, now = clock.now()) {
-  if (pickupKey !== lisbonDateKey(now)) return null;
+function pickupError(pickupKey, pickupTime, now = clock.now()) {
+  if (pickupKey !== lisbonDateKey(now)) return 'pickup';
   const m = toMinutes(pickupTime), open = toMinutes(BAR.open);
-  if (m < open || m > toMinutes(RESERVATION.todayUntil) || (m - open) % RESERVATION.stepMin) return null;
-  const at = lisbonEpoch(pickupKey, pickupTime);
-  return at - now < RESERVATION.minLeadMin * 60000 ? null : at;
+  if (m < open || m > toMinutes(RESERVATION.todayUntil) || (m - open) % RESERVATION.stepMin) return 'pickup';
+  const minuteNow = Math.floor(now / 60000) * 60000;
+  return lisbonEpoch(pickupKey, pickupTime) - minuteNow < RESERVATION.minLeadMin * 60000 ? 'lead' : null;
 }
+
+/** Hora de levantamento (ms) calculada no servidor (o `pickupAt` do cliente é ignorado); null se não servir. */
+const pickupAtFor = (pickupKey, pickupTime, now = clock.now()) =>
+  (pickupError(pickupKey, pickupTime, now) ? null : lisbonEpoch(pickupKey, pickupTime));
 
 /** Horas de hoje (Lisboa) que já atingiram RESERVATION.slotCapacity: { key, full: ['12:30', ...] }. */
 async function slotsToday() {
@@ -173,8 +178,9 @@ function studentRouter() {
     // Dia e hora vão parar ao ecrã do terminal: só se aceita o formato exato ("2026-11-05", "12:30")
     if (reservation && !(/^\d{4}-\d{2}-\d{2}$/.test(pickupKey) && /^([01]\d|2[0-3]):[0-5]\d$/.test(pickupTime))) throw fail('pickup');
     // Só se reserva para hoje, na grelha do bar e até às 18:00 (mesmas regras que a app mostra em shared/data.js)
-    const pickupAt = reservation ? pickupAtFor(pickupKey, pickupTime) : null;
-    if (reservation && !pickupAt) throw fail('pickup');
+    const why = reservation ? pickupError(pickupKey, pickupTime) : null;
+    if (why) throw fail(why);
+    const pickupAt = reservation ? lisbonEpoch(pickupKey, pickupTime) : null;
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');

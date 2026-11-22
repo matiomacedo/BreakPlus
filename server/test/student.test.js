@@ -256,6 +256,14 @@ for (const [time, why] of [['12:15', 'fora da grelha de 30 min'], ['21:00', 'dep
   });
 }
 
+test('a antecedência conta em minutos inteiros, como a app (12:00:40 → 12:30 ainda serve)', async () => {
+  assert.equal(pickupAtFor(todayKey(), '12:30', at('12:00') + 40000), at('12:30'));
+  assert.equal(pickupAtFor(todayKey(), '12:30', at('12:01')), null);
+  clock.now = () => at('12:01') + 5000;
+  const r = await call('/api/orders', { token: await login(), body: reservation('12:30') });
+  assert.deepEqual([r.status, r.body.reason], [400, 'lead']);   // motivo próprio (não o "só até às 18:00")
+});
+
 test('pickupAtFor recusa uma hora daqui a 5 min e aceita com 30 min de antecedência', () => {
   assert.equal(pickupAtFor(todayKey(), '12:00', at('11:55')), null);
   assert.equal(pickupAtFor(todayKey(), '12:30', at('12:00')), at('12:30'));
