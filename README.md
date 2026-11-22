@@ -60,7 +60,7 @@ MONGODB_URI="<...>" npm run create-staff -- maria@ipvc.pt "Maria Silva" <passwor
 
 ## Publicar online (Render + Vercel)
 
-A API fica no **Render** e o frontend estático na **Vercel**. O `terminal/config.js` continua fora do git: na Vercel é **gerado no build** a partir de variáveis de ambiente.
+A API fica no **Render** e o frontend estático na **Vercel**. O `js/config.js` é **gerado no build** a partir de variáveis de ambiente na Vercel.
 
 ### 1. API no Render (Web Service)
 
@@ -214,7 +214,7 @@ js/                   app dos alunos: config, login (auth.js), store.js, estado,
                       notificações do sistema (notifications.js), PWA (pwa.js), eventos
 css/                  estilos da app dos alunos (styles.css, auth.css)
 terminal/index.html   app do terminal
-terminal/js/          store.js (chave do terminal + ações do balcão), ui.js, app.js
+terminal/js/          store.js (ações do balcão), ui.js, app.js
 terminal/css/         estilos do terminal
 shared/
   data.js             pratos (com complexidade/tempo), bar e regras das reservas (o servidor também lê este ficheiro)
@@ -233,6 +233,6 @@ ProfilePictureUser/   fotografias de perfil (avatar dos utilizadores)
 ```
 
 Cada app cria a sua `Store` com `createStore()` (`shared/api.js`), injetando a forma de falar com o servidor
-(o aluno com o token de sessão, o terminal com a chave) e as suas ações de escrita. As vistas só falam com `Store`.
+(o aluno e a funcionária com o token de sessão) e as suas ações de escrita. As vistas só falam com `Store`.
 
 Estados de um pedido: `reserved` → `received` → `preparing` → `ready` → `done` (ou `cancelled`).
