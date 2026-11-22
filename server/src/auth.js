@@ -41,12 +41,29 @@ const staffAuth = authAs(['staff']);
 const studentAuth = authAs(['student', 'teacher']);
 
 const lockedMin = (u) => (u.lockUntil && u.lockUntil > new Date() ? Math.ceil((u.lockUntil - new Date()) / 60000) : 0);
-async function registerFail(u) {
-  if (u.lockUntil && !lockedMin(u)) u.lockUntil = null;   // bloqueio antigo já expirado
-  u.failCount += 1;
-  if (u.failCount >= MAX_FAILS) { u.lockUntil = new Date(Date.now() + LOCK_MIN * 60000); u.failCount = 0; }
-  await u.save();
+
+/* Tentativas de login (password ou PIN). Cada tentativa é reservada de forma atómica ANTES de verificar o
+   segredo: pedidos em paralelo nunca conseguem mais do que MAX_FAILS verificações por bloqueio. */
+
+/** Reserva uma tentativa. Devolve o utilizador com o failCount já incrementado, ou null se estiver bloqueado. */
+async function takeAttempt(id) {
+  const now = new Date();
+  await User.updateOne({ _id: id, lockUntil: { $ne: null, $lte: now } }, { lockUntil: null, failCount: 0 });   // bloqueio expirado
+  return User.findOneAndUpdate({ _id: id, lockUntil: null, failCount: { $lt: MAX_FAILS } }, { $inc: { failCount: 1 } }, { new: true })
+    .select('+failCount +lockUntil');
+}
+
+/** Minutos que faltam do bloqueio (para a resposta 'locked'); se ainda não foi gravado, a duração inteira. */
+async function lockMinutes(id) {
+  return lockedMin(await User.findById(id).select('+lockUntil')) || LOCK_MIN;
+}
+
+/** Tentativa errada: à MAX_FAILS-ésima bloqueia LOCK_MIN minutos. Devolve os minutos de bloqueio (0 = não bloqueou). */
+async function failAttempt(u) {
+  if (u.failCount < MAX_FAILS) return 0;
+  await User.updateOne({ _id: u._id, lockUntil: null }, { lockUntil: new Date(Date.now() + LOCK_MIN * 60000), failCount: 0 });
+  return LOCK_MIN;
 }
 const publicUser = (u) => ({ id: u._id, name: u.name, role: u.role, roleLabel: u.roleLabel, email: u.email, avatar: u.avatar || '' });
 
-module.exports = { hash, verify, sign, auth, staffAuth, studentAuth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS };
+module.exports = { hash, verify, sign, auth, staffAuth, studentAuth, takeAttempt, failAttempt, lockMinutes, publicUser, SECRET, MAX_FAILS };

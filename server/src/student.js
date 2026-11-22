@@ -3,7 +3,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { User, Product, Order, Transaction, PushSubscription, Slot } = require('./models');
-const { verify, sign, auth, studentAuth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
+const { verify, sign, auth, studentAuth, takeAttempt, failAttempt, lockMinutes, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
 const { r2, barSettings, queueStats, popularItems, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
@@ -68,27 +68,31 @@ function studentRouter() {
 
   r.post('/auth/login', wrap(async (req, res) => {
     const email = String(req.body.email || '').toLowerCase().trim();
-    const u = await User.findOne({ email }).select('+passwordHash +failCount +lockUntil');
+    const u = await User.findOne({ email }).select('+passwordHash');
     if (!u) throw fail('credentials', {}, 401);                        // mesma resposta: não revela se o email existe
-    const lock = lockedMin(u);
-    if (lock) throw fail('locked', { minutes: lock }, 429);
-    if (!verify(req.body.password, u.passwordHash)) { await registerFail(u); throw fail('credentials', {}, 401); }
+    const attempt = await takeAttempt(u._id);
+    if (!attempt) throw fail('locked', { minutes: await lockMinutes(u._id) }, 429);
+    if (!verify(req.body.password, u.passwordHash)) {
+      const minutes = await failAttempt(attempt);
+      if (minutes) throw fail('locked', { minutes }, 429);
+      throw fail('credentials', {}, 401);
+    }
+    await User.updateOne({ _id: u._id, failCount: { $gt: 0 } }, { $inc: { failCount: -1 } });   // password certa: devolve a tentativa
     res.json({ ok: true, preToken: sign(u, 'pin'), name: u.name });
   }));
 
   r.post('/auth/pin', wrap(async (req, res) => {
     let t; try { t = jwt.verify(req.body.preToken, SECRET); if (t.scope !== 'pin') throw 0; } catch { throw fail('expired', {}, 401); }
-    const u = await User.findById(t.sub).select('+pinHash +failCount +lockUntil');
+    const u = await User.findById(t.sub).select('+pinHash');
     if (!u) throw fail('expired', {}, 401);
-    const lock = lockedMin(u);
-    if (lock) throw fail('locked', { minutes: lock }, 429);
+    const attempt = await takeAttempt(u._id);
+    if (!attempt) throw fail('locked', { minutes: await lockMinutes(u._id) }, 429);
     if (!/^\d{4}$/.test(String(req.body.pin)) || !verify(req.body.pin, u.pinHash)) {
-      await registerFail(u);
-      const minutes = lockedMin(u);
+      const minutes = await failAttempt(attempt);
       if (minutes) throw fail('locked', { minutes }, 429);
-      throw fail('pin', { attemptsLeft: MAX_FAILS - u.failCount }, 401);
+      throw fail('pin', { attemptsLeft: MAX_FAILS - attempt.failCount }, 401);
     }
-    u.failCount = 0; u.lockUntil = null; await u.save();
+    await User.updateOne({ _id: u._id }, { failCount: 0, lockUntil: null });
     res.json({ ok: true, token: sign(u, 'full'), user: publicUser(u) });
   }));
 

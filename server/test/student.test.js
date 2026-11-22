@@ -62,6 +62,31 @@ test('a 5.ª tentativa de PIN errada bloqueia e devolve os minutos', async () =>
   assert.deepEqual([r.body.reason, r.body.minutes], ['locked', 5]);
 });
 
+test('PINs errados em paralelo não passam das 5 tentativas (o bloqueio é atómico)', async () => {
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const pins = ['0000', '0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009'];
+  const rs = await Promise.all(pins.map((pin) => call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin } })));
+  const reasons = rs.map((r) => r.body.reason).sort();
+  assert.deepEqual(reasons, [...Array(6).fill('locked'), ...Array(4).fill('pin')]);   // só 5 PINs verificados; a 5.ª bloqueia
+  const right = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '1234' } });
+  assert.deepEqual([right.status, right.body.reason], [429, 'locked']);              // bloqueada: nem o PIN certo entra
+});
+
+test('a 5.ª password errada bloqueia e o PIN/password certos deixam de entrar', async () => {
+  let r;
+  for (let i = 0; i < 5; i++) r = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'errada' } });
+  assert.deepEqual([r.status, r.body.reason, r.body.minutes], [429, 'locked', 5]);
+  const ok = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  assert.deepEqual([ok.status, ok.body.reason], [429, 'locked']);
+});
+
+test('uma password certa não gasta tentativas do PIN', async () => {
+  for (let i = 0; i < 3; i++) await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
+  const r = await call('/api/auth/pin', { body: { preToken: s1.body.preToken, pin: '0000' } });
+  assert.equal(r.body.attemptsLeft, 4);
+});
+
 test('o token do 1.º passo (só password) não serve para usar a API', async () => {
   const s1 = await call('/api/auth/login', { body: { email: 'aluno@demo.pt', password: 'demo1234' } });
   const r = await call('/api/state', { token: s1.body.preToken });
