@@ -5,7 +5,7 @@ const { User, Product, Order, Transaction, PushSubscription } = require('./model
 const { verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
-const { r2, barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const { r2, barSettings, queueStats, popularItems, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
 const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
@@ -124,17 +124,17 @@ function studentRouter() {
 
   /* ---------- Dados ---------- */
 
-  // Estado da app: só os pedidos e a carteira de quem tem sessão + fila global (tempo de espera)
+  // Estado da app: só os pedidos e a carteira de quem tem sessão + fila global (tempo de espera) + "Mais pedido"
   r.get('/state', auth, wrap(async (req, res) => {
-    const [products, set, orders, txs, stats] = await Promise.all([
+    const [products, set, orders, txs, stats, popular] = await Promise.all([
       Product.find(), barSettings(),
       Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       Transaction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50),
-      queueStats(),
+      queueStats(), popularItems(),
     ]);
     res.json({
       stock: Object.fromEntries(products.map((p) => [p.itemId, p.stock])),
-      paused: set.paused, ...stats,
+      paused: set.paused, ...stats, popular,
       wallet: { balance: req.user.balance, transactions: txs },
       orders: orders.map((o) => orderOut(o, req.user._id)),
     });

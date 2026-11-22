@@ -97,6 +97,38 @@ test('num dia novo a senha recomeça em 1', async () => {
   assert.equal(s.body.wallet.transactions[0].ticket, 1);               // o movimento mostra a senha
 });
 
+/* ---------- "Mais pedido" ---------- */
+
+const order = (token, items) => call('/api/orders', { token, body: { type: 'now', items } });
+
+test('"Mais pedido": o produto mais pedido vem primeiro e os cancelados não contam', async () => {
+  const { Product, Order } = require('../src/models');
+  await Product.insertMany([{ itemId: 3, name: 'Donut', price: 1, stock: 10 }]);
+  const token = await login();
+  await order(token, { 2: 2 });                              // croissant: 2
+  await order(token, { 1: 1, 3: 1 });                       // tosta: 1, donut: 1
+  const cancelled = (await order(token, { 3: 5 })).body.order;
+  await Order.updateOne({ _id: cancelled._id }, { status: 'cancelled' });   // donut: +5, mas cancelado
+  const s = await call('/api/state', { token });
+  assert.deepEqual(s.body.popular, [2, 1]);                 // croissant (2), depois o empate tosta/donut pelo id
+});
+
+test('"Mais pedido": pedidos com mais de 7 dias não contam', async () => {
+  const { Order } = require('../src/models');
+  const token = await login();
+  const old = (await order(token, { 2: 3 })).body.order;
+  await Order.collection.updateOne({ number: old.number }, { $set: { createdAt: new Date(Date.now() - 8 * 86400000) } });
+  await order(token, { 1: 3 });
+  assert.deepEqual((await call('/api/state', { token })).body.popular, [1]);
+});
+
+test('"Mais pedido": sem pedidos suficientes não destaca nenhum produto', async () => {
+  const token = await login();
+  assert.deepEqual((await call('/api/state', { token })).body.popular, []);
+  await order(token, { 1: 2 });                              // só 2 unidades no total
+  assert.deepEqual((await call('/api/state', { token })).body.popular, []);
+});
+
 test('o estado do aluno só mostra os pedidos dele', async () => {
   const ana = await login('ana@demo.pt', 'demo1234', '4321');
   await call('/api/orders', { token: ana, body: { type: 'now', items: { 1: 1 } } });

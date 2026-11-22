@@ -54,13 +54,15 @@ const db = () => Store.get();
 const balance = () => db().wallet.balance;
 const stockOf = (id) => db().stock[id] ?? 0;
 const isPaused = () => db().paused;
+/** "Mais pedido": calculado no servidor a partir dos pedidos reais (vazio sem pedidos suficientes). */
+const isPopular = (id) => (db().popular || []).includes(id);
 
 /* ---------- Menu e carrinho ---------- */
 
 function visibleItems() {
   return ITEMS.filter((item) =>
     (state.category === 'Todos' || item.category === state.category) &&
-    (state.period === 'Todos' || item.periods.includes(state.period))
+    (state.period === 'Todos' || (state.period === 'Destaques' ? isPopular(item.id) : item.periods.includes(state.period)))
   );
 }
 

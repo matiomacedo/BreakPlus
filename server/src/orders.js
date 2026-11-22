@@ -36,6 +36,22 @@ const findOrder = (id, session = null) => (mongoose.isValidObjectId(id) ? Order.
 /** Número a mostrar (senha do dia; os pedidos antigos, sem senha, mostram o número sequencial). */
 const ticketOf = (o) => o.ticket ?? o.number;
 
+/** "Mais pedido": os produtos com mais unidades pedidas nos últimos `days` dias (pedidos cancelados não contam).
+    Com menos de `minUnits` unidades no total não há dados suficientes e não se destaca nenhum. */
+const POPULAR = { days: 7, top: 2, minUnits: 3 };
+async function popularItems(now = Date.now()) {
+  const rows = await Order.aggregate([
+    { $match: { status: { $ne: 'cancelled' }, createdAt: { $gte: new Date(now - POPULAR.days * 86400000) } } },
+    { $project: { items: { $objectToArray: '$items' } } },
+    { $unwind: '$items' },
+    { $group: { _id: '$items.k', qty: { $sum: '$items.v' } } },
+  ]);
+  if (rows.reduce((sum, r) => sum + r.qty, 0) < POPULAR.minUnits) return [];
+  return rows.map((r) => ({ id: +r._id, qty: r.qty }))
+    .sort((a, b) => b.qty - a.qty || a.id - b.id)
+    .slice(0, POPULAR.top).map((r) => r.id);
+}
+
 /**
  * Cancela um pedido: devolve o saldo, repõe o stock e regista o reembolso.
  * `by`: 'student' | 'staff'; `name`: quem anulou. `check(order)` pode recusar (lançando `fail`) antes de mexer em nada.
@@ -53,4 +69,4 @@ const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session)
   return o;
 });
 
-module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, findOrder, ticketOf, cancelOrder };
+module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, findOrder, ticketOf, cancelOrder };
