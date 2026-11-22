@@ -408,7 +408,6 @@ function showTab(name) {
 
 /** Mostra/esconde o aviso de ligação (chamado pela store a cada atualização). */
 const CONN_TEXT = {
-  terminal_key: 'Chave do terminal em falta ou errada. Confirma terminalKey em terminal/config.js (igual a TERMINAL_KEY em server/.env).',
   network: 'Sem ligação ao servidor. A tentar outra vez…',
 };
 function showConnection(ok, reason) {

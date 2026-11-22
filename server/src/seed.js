@@ -16,9 +16,11 @@ const { loadSharedData } = require('./shared-data');
   await User.create([
     { name: 'Gonçalo Silva', role: 'student', roleLabel: 'Estudante', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5, avatar: '/ProfilePictureUser/goncalo.svg' },
     { name: 'Ana Costa', role: 'student', roleLabel: 'Estudante', email: 'ana@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('4321'), balance: 8, avatar: '/ProfilePictureUser/ana.svg' },
+    // Funcionária do bar: só esta conta entra no terminal (papel "staff")
+    { name: 'Rosa Ferreira', role: 'staff', roleLabel: 'Funcionária', email: 'bar@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('9999') },
   ]);
   await Setting.create({ _id: 'bar', paused: false, lastNumber: 100 });
-  console.log(`Seed ok: ${ITEMS.length} produtos, 2 utilizadores`);
-  console.log('Login: aluno@demo.pt / demo1234 / PIN 1234  ·  ana@demo.pt / demo1234 / PIN 4321');
+  console.log(`Seed ok: ${ITEMS.length} produtos, 3 utilizadores`);
+  console.log('Login: aluno@demo.pt / demo1234 / PIN 1234  ·  ana@demo.pt / demo1234 / PIN 4321  ·  terminal: bar@demo.pt / demo1234 / PIN 9999');
   await mongoose.disconnect();
 })();

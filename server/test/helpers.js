@@ -2,13 +2,12 @@
    Define as variáveis de ambiente ANTES de carregar o código da app, para nunca
    usar o server/.env (que aponta para a base de dados real). */
 process.env.JWT_SECRET = 'segredo-de-teste';
-process.env.TERMINAL_KEY = 'chave-do-terminal-de-teste';
 process.env.CORS_ORIGINS = 'http://localhost:8000';
 
 const { MongoMemoryReplSet } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 
-let replSet, server, base;
+let replSet, server, base, staffToken;
 
 async function startServer() {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
@@ -30,7 +29,7 @@ async function stopServer() {
   await replSet.stop();
 }
 
-/** Base de dados limpa com 2 produtos, 2 alunos e as definições do bar. */
+/** Base de dados limpa com 2 produtos, 2 alunos, 1 funcionária do bar e as definições do bar. */
 async function resetData() {
   const { User, Product, Order, Transaction, PushSubscription, Setting } = require('../src/models');
   const { hash } = require('../src/auth');
@@ -42,7 +41,9 @@ async function resetData() {
   await User.create([
     { name: 'Gonçalo Silva', role: 'student', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5, avatar: '/ProfilePictureUser/goncalo.svg' },
     { name: 'Ana Costa', role: 'teacher', roleLabel: 'Docente', email: 'ana@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('4321'), balance: 8, avatar: 'ana.svg' },
+    { name: 'Rosa Ferreira', role: 'staff', roleLabel: 'Funcionária', email: 'bar@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('9999') },
   ]);
+  staffToken = null;
   await Setting.create({ _id: 'bar', paused: false, lastNumber: 100 });
 }
 
@@ -67,10 +68,21 @@ async function login(email = 'aluno@demo.pt', password = 'demo1234', pin = '1234
   return s2.body.token;
 }
 
-const terminal = (path, opts = {}) =>
-  call('/api/terminal' + path, { ...opts, headers: { 'X-Terminal-Key': process.env.TERMINAL_KEY, ...opts.headers } });
+/** Token de sessão da funcionária do bar (gerado direto, para não repetir o login em cada pedido). */
+async function staff() {
+  if (!staffToken) {
+    const { User } = require('../src/models');
+    const { sign } = require('../src/auth');
+    staffToken = sign(await User.findOne({ email: 'bar@demo.pt' }), 'full');
+  }
+  return staffToken;
+}
+
+/** Pedido ao terminal com a sessão da funcionária (ou outro `token`, se for dado). */
+const terminal = async (path, opts = {}) =>
+  call('/api/terminal' + path, { token: 'token' in opts ? opts.token : await staff(), ...opts });
 
 /** Endereço do servidor de teste (para ligar sockets). */
 const baseUrl = () => base;
 
-module.exports = { baseUrl, startServer, stopServer, resetData, call, login, terminal };
+module.exports = { staff, baseUrl, startServer, stopServer, resetData, call, login, terminal };

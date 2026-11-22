@@ -34,7 +34,7 @@ async function requestJson(path, { body, headers = {} } = {}) {
  * actions({ post, withOrder }) → ações de escrita desta app (ficam no objeto devolvido)
  * onConnection(ok, reason) → chamado a cada atualização (para mostrar erros de ligação)
  * cacheKey → opcional: guarda a última resposta em localStorage para abrir sem rede
- * socketAuth() → credenciais do Socket.IO ({ token } ou { terminalKey }); sem isto, só polling
+ * socketAuth() → credenciais do Socket.IO ({ token }); sem isto, só polling
  */
 function createStore({ request, statePath, actions, onConnection = () => {}, cacheKey = null, socketAuth = null }) {
   const whenText = (ts) => {

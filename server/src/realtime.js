@@ -1,22 +1,23 @@
 /* Tempo real (Socket.IO): avisa as apps de que o estado mudou, para não esperarem pelo polling.
    - Alunos/docentes ligam-se com o token de sessão → sala "user:<id>" (só os seus pedidos/saldo).
-   - O terminal liga-se com a TERMINAL_KEY → sala "terminal" (todos os pedidos).
+   - As funcionárias (papel "staff") ligam-se com o token delas → sala "terminal" (todos os pedidos).
    Os eventos não levam dados: cada app volta a pedir o seu /state, que já filtra o que pode ver. */
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const { SECRET, sameKey } = require('./auth');
+const { SECRET } = require('./auth');
+const { User } = require('./models');
 
 let io = null;
 
-function attach(httpServer, { corsOrigins, terminalKey }) {
+function attach(httpServer, { corsOrigins }) {
   io = new Server(httpServer, { cors: { origin: corsOrigins } });
-  io.use((socket, next) => {
-    const { token, terminalKey: key } = socket.handshake.auth || {};
-    if (key && sameKey(key, terminalKey)) { socket.data.room = 'terminal'; return next(); }
+  io.use(async (socket, next) => {
     try {
-      const t = jwt.verify(String(token || ''), SECRET);
+      const t = jwt.verify(String((socket.handshake.auth || {}).token || ''), SECRET);
       if (t.scope !== 'full') throw new Error('scope');
-      socket.data.room = 'user:' + t.sub;
+      const user = await User.findById(t.sub).select('role');
+      if (!user) throw new Error('user');
+      socket.data.room = user.role === 'staff' ? 'terminal' : 'user:' + t.sub;
       next();
     } catch { next(new Error('unauthenticated')); }
   });

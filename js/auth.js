@@ -1,7 +1,7 @@
 /* ==========================================================================
    auth.js — login da app dos alunos/docentes: email + password, depois o
    PIN do cartão num keypad 0–9. Arranque: Auth.start({ key, roles, onEnter }).
-   (O terminal do bar não tem login: ver terminal/js/store.js.)
+   Também usado pelo terminal do bar, só para contas com o papel "staff".
    ========================================================================== */
 
 const Auth = (() => {

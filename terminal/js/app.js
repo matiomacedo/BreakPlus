@@ -90,6 +90,7 @@ const ACTIONS = {
     Store.setPaused(paused);
     toast(paused ? 'Pedidos na hora em pausa' : 'Balcão aberto', paused ? 'Os alunos só podem reservar até retomares.' : 'Os pedidos na hora voltaram a entrar.');
   },
+  'logout': () => Auth.logout(),
   'fullscreen': () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
@@ -150,15 +151,15 @@ document.addEventListener('pointercancel', endDrag);
 
 /* ---------- Arranque ---------- */
 
-// Sem login: o terminal abre logo na fila (a chave do terminal vai em cada pedido).
-(async () => {
-  try {
+// Login das funcionárias (papel "staff"); só depois se carrega o estado do bar.
+Auth.start({
+  key: 'bp_token_staff',
+  roles: ['staff'],
+  onEnter: async (user) => {
+    document.getElementById('staff-name').textContent = user.name;
     await Store.start();
-  } finally {
-    const overlay = document.getElementById('boot');
-    if (overlay) overlay.hidden = true;
-  }
-  Store.subscribe(render); render(); showTab('orders');
-  // Relógio, "Há N min" e prioridade (a espera muda a ordem sem novos pedidos).
-  setInterval(() => { tickTimes(); renderTopbar(); refreshQueuePriority(); }, 15000);
-})();
+    Store.subscribe(render); render(); showTab('orders');
+    // Relógio, "Há N min" e prioridade (a espera muda a ordem sem novos pedidos).
+    setInterval(() => { tickTimes(); renderTopbar(); refreshQueuePriority(); }, 15000);
+  },
+});

@@ -16,6 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../shared/tokens.css">
   <link rel="stylesheet" href="../shared/boot.css">
+  <link rel="stylesheet" href="../css/auth.css">
   <link rel="stylesheet" href="css/terminal.css">
 </head>
 <body>
@@ -38,6 +39,7 @@
       <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
       <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
       <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
@@ -87,17 +89,20 @@
     </nav>
 
     <div class="actions">
-      <div class="terminal-id"><b>Terminal Balcão 1</b><small>Posto partilhado · Operacional</small></div>
+      <div class="terminal-id"><b>Terminal Balcão 1</b><small id="staff-name">Operacional</small></div>
       <button class="btn soft" id="pause-btn" data-act="pause" title="Pausar pedidos na hora">
         <svg class="ic"><use href="#i-pause"/></svg><span id="pause-label">Pausar</span>
       </button>
       <button class="btn soft icon" data-act="fullscreen" title="Ecrã completo" aria-label="Ecrã completo">
         <svg class="ic"><use href="#i-maximize"/></svg>
       </button>
+      <button class="btn soft icon" data-act="logout" title="Terminar sessão" aria-label="Terminar sessão">
+        <svg class="ic"><use href="#i-logout"/></svg>
+      </button>
     </div>
   </header>
 
-  <!-- Aviso permanente quando não há ligação ao servidor (ou a chave do terminal está errada) -->
+  <!-- Aviso permanente quando não há ligação ao servidor -->
   <div class="pause-strip conn-strip" id="conn-strip" role="alert" hidden>
     <svg class="ic"><use href="#i-ban"/></svg>
     <span id="conn-msg"></span>
@@ -180,14 +185,50 @@
     </div>
   </div>
 
-  <!-- Ordem importa: configuração → dados partilhados → store → UI → eventos.
-       config.js não está no repositório (tem a chave): copia config.example.js. -->
-  <script src="config.js"></script>
+  <!-- Login das funcionárias: email + password, depois PIN (mesmo login da app). Lógica em ../js/auth.js -->
+  <div class="auth" id="auth" hidden>
+    <div class="auth-card">
+      <picture>
+        <source srcset="../images/logo-break-estg-dark.png" media="(prefers-color-scheme: dark)">
+        <img class="logo" src="../images/logo-break-estg.png" alt="Break+ ESTG" width="119" height="41">
+      </picture>
+
+      <form class="auth-step" id="auth-s1" autocomplete="on">
+        <h1>Entrar</h1>
+        <p>Terminal do bar · usa a tua conta de funcionária.</p>
+        <input class="auth-field" id="auth-email" type="email" placeholder="Email" autocomplete="username" required>
+        <input class="auth-field" id="auth-pass" type="password" placeholder="Password" autocomplete="current-password" required>
+        <button class="auth-btn" type="submit">Continuar</button>
+      </form>
+
+      <div class="auth-step" id="auth-s2" hidden>
+        <h1 id="auth-hello">Olá</h1>
+        <p>Introduz o teu PIN.</p>
+        <div class="pin-dots" id="pin-dots" aria-label="PIN"><i></i><i></i><i></i><i></i></div>
+        <div class="keypad" id="auth-keypad">
+          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+          <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+          <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+          <button class="spacer" tabindex="-1" aria-hidden="true"></button>
+          <button data-key="0">0</button>
+          <button class="back" data-key="back" aria-label="Apagar">⌫</button>
+        </div>
+        <button class="auth-link" id="auth-back" type="button">Usar outra conta</button>
+      </div>
+
+      <div class="auth-err" id="auth-err" role="alert"></div>
+      <button class="auth-link" id="auth-retry" type="button" hidden>Tentar outra vez</button>
+    </div>
+
+  <!-- Ordem importa: configuração → dados partilhados → login → store → UI → eventos.
+       O endereço da API é o mesmo da app dos alunos (js/config.js). -->
+  <script src="../js/config.js"></script>
   <script src="../shared/data.js"></script>
   <script src="../shared/queue.js"></script>
   <script src="../shared/util.js"></script>
   <script src="../shared/api.js"></script>
   <script src="../shared/nozoom.js"></script>
+  <script src="../js/auth.js"></script>
   <script src="js/store.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>

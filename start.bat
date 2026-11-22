@@ -29,12 +29,6 @@ if not exist "%ROOT%\server\.env" (
   pause
   exit /b 1
 )
-if not exist "%ROOT%\terminal\config.js" (
-  echo [ERRO] Falta "%ROOT%\terminal\config.js".
-  echo        Copia terminal\config.example.js para terminal\config.js.
-  pause
-  exit /b 1
-)
 
 if not exist "%ROOT%\server\node_modules" (
   echo A instalar dependencias da API ^(npm install^)...

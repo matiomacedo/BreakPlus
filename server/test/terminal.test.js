@@ -1,4 +1,4 @@
-/* Terminal do bar: sem login, protegido pela chave partilhada (X-Terminal-Key). */
+/* Terminal do bar: exige a sessão de uma funcionária (papel "staff"). */
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { startServer, stopServer, resetData, call, login, terminal } = require('./helpers');
@@ -12,20 +12,45 @@ const placeNow = async (token, items = { 1: 2 }) =>
 
 /* ---------- Proteção ---------- */
 
-test('sem chave do terminal → 401', async () => {
-  const r = await call('/api/terminal/state');
-  assert.deepEqual([r.status, r.body.reason], [401, 'terminal_key']);
+const TERMINAL_ROUTES = [
+  ['/state', undefined],
+  ['/orders/101/status', { status: 'ready' }],
+  ['/orders/101/notify', {}],
+  ['/orders/101/cancel', {}],
+  ['/stock/1', { delta: 5 }],
+  ['/paused', { paused: true }],
+];
+
+test('sem sessão → 401 em todas as rotas do terminal', async () => {
+  for (const [path, body] of TERMINAL_ROUTES) {
+    const r = await terminal(path, { token: null, body });
+    assert.deepEqual([path, r.status, r.body.reason], [path, 401, 'unauthenticated']);
+  }
 });
 
-test('chave errada → 401, também nas ações de escrita', async () => {
-  const bad = { headers: { 'X-Terminal-Key': 'errada' } };
-  assert.equal((await terminal('/state', bad)).status, 401);
-  assert.equal((await terminal('/paused', { ...bad, body: { paused: true } })).status, 401);
+test('token inválido ou só do 1.º passo (password) → 401', async () => {
+  const s1 = await call('/api/auth/login', { body: { email: 'bar@demo.pt', password: 'demo1234' } });
+  assert.equal((await terminal('/state', { token: 'lixo' })).status, 401);
+  assert.equal((await terminal('/state', { token: s1.body.preToken })).status, 401);
 });
 
-test('o token de um aluno não abre o terminal', async () => {
-  const r = await call('/api/terminal/state', { token: await login() });
-  assert.equal(r.status, 401);
+test('um aluno ou docente com sessão não consegue usar nenhuma rota do terminal', async () => {
+  for (const token of [await login(), await login('ana@demo.pt', 'demo1234', '4321')]) {
+    await placeNow(token);
+    for (const [path, body] of TERMINAL_ROUTES) {
+      const r = await terminal(path, { token, body });
+      assert.deepEqual([path, r.status, r.body.reason], [path, 403, 'forbidden']);
+    }
+  }
+  const s = await terminal('/state');
+  assert.deepEqual([s.body.paused, s.body.stock[1], s.body.orders.every((o) => o.status === 'received')], [false, 6, true]);   // 2 pedidos de 2 tostas; nada mudou
+});
+
+test('a funcionária entra com o mesmo login em 2 passos e o papel "staff"', async () => {
+  const token = await login('bar@demo.pt', 'demo1234', '9999');
+  const me = await call('/api/auth/me', { token });
+  assert.equal(me.body.user.role, 'staff');
+  assert.equal((await terminal('/state', { token })).status, 200);
 });
 
 /* ---------- Estado ---------- */
@@ -92,7 +117,8 @@ test('cancelar no terminal: reembolsa, repõe stock, regista Transaction e cance
   await terminal(`/orders/${o.number}/status`, { body: { status: 'preparing' } });   // o bar pode anular em qualquer estado
   const r = await terminal(`/orders/${o.number}/cancel`, { body: {} });
   assert.equal(r.body.ok, true);
-  assert.deepEqual([r.body.order.status, r.body.order.cancelledBy], ['cancelled', 'staff']);
+  assert.deepEqual([r.body.order.status, r.body.order.cancelledBy, r.body.order.cancelledByName], ['cancelled', 'staff', 'Rosa Ferreira']);
+  assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['preparing', 'Rosa Ferreira'], ['cancelled', 'Rosa Ferreira']]);
   const s = await call('/api/state', { token });
   assert.deepEqual([s.body.wallet.balance, s.body.stock[1]], [12.5, 10]);
   assert.deepEqual(s.body.wallet.transactions.map((t) => t.kind), ['refund', 'order']);
@@ -153,9 +179,11 @@ test('/api/users e /api/users/:id/orders foram removidos', async () => {
   assert.equal((await call('/api/users/x/orders', { token })).status, 404);
 });
 
-test('não existe papel "staff" nos utilizadores', async () => {
-  const { User } = require('../src/models');
-  await assert.rejects(User.create({ name: 'X', role: 'staff', email: 'x@demo.pt', passwordHash: 'a', pinHash: 'b' }), /staff/);
+test('cada ação do terminal fica registada com o nome da funcionária', async () => {
+  const o = await placeNow(await login());
+  await terminal(`/orders/${o.number}/status`, { body: { status: 'ready' } });
+  const r = await terminal(`/orders/${o.number}/notify`, { body: {} });
+  assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['ready', 'Rosa Ferreira'], ['notified', 'Rosa Ferreira']]);
 });
 
 /* ---------- Web Push ---------- */
