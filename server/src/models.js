@@ -28,7 +28,7 @@ const Order = model('Order', new Schema({
   items: { type: Schema.Types.Mixed },                     // { itemId: qty }
   total: Number,
   pickupKey: String, pickupTime: String,
-  pickupAt: Number,                                         // hora de levantamento (ms), calculada no cliente
+  pickupAt: Number,                                         // hora de levantamento (ms), calculada no servidor (Lisboa)
   queuedAt: Number, readyAt: Number, doneAt: Number, cancelledAt: Number,   // carimbos (ms) usados no terminal
   notifiedAt: { type: Number, default: 0 },
   cancelledBy: { type: String, enum: ['student', 'staff', null], default: null },
