@@ -12,6 +12,7 @@ const terminalRequest = async (path, body) =>
 const Store = createStore({
   request: terminalRequest,
   statePath: '/state',
+  socketAuth: () => ({ terminalKey: TERMINAL_KEY }),
   onConnection: (ok, reason) => showConnection(ok, reason),      // em terminal/js/ui.js
   actions: ({ post }) => ({
     setStatus: (number, status) => post(`/orders/${number}/status`, { status }),

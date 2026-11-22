@@ -7,6 +7,7 @@ const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
 const { r2, barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
+const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
 const { loadSharedData } = require('./shared-data');
 
@@ -179,6 +180,7 @@ function studentRouter() {
       await Transaction.create([{ user: u._id, kind: 'order', amount: -total, order: order.number }], { session });
       return order;
     });
+    realtime.orderChanged(req.user._id);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
 
@@ -188,6 +190,7 @@ function studentRouter() {
       if (String(o.user) !== String(req.user._id)) throw fail('forbidden', {}, 403);
       if (o.status !== 'reserved' || o.pickupAt - clock.now() < RESERVATION.cancelBeforeMin * 60000) throw fail('window');
     });
+    realtime.orderChanged(req.user._id);
     await out.populate('user', USER_FIELDS);
     res.json({ ok: true, order: orderOut(out, req.user._id) });
   }));
@@ -197,6 +200,7 @@ function studentRouter() {
     if (!(amount > 0 && amount <= 100)) throw fail('amount');
     const u = await User.findByIdAndUpdate(req.user._id, { $inc: { balance: amount } }, { new: true });
     await Transaction.create({ user: u._id, kind: 'topup', amount });
+    realtime.userChanged(u._id, 'wallet');
     res.json({ ok: true, balance: u.balance });
   }));
 

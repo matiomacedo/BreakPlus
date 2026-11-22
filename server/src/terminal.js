@@ -1,11 +1,12 @@
 /* Rotas do terminal do bar (montadas em /api/terminal). Sem login: cada pedido traz a chave
    partilhada TERMINAL_KEY no cabeçalho X-Terminal-Key (configurada em terminal/config.js). */
-const crypto = require('crypto');
 const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
 const { barSettings, queueStats, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
+const { sameKey } = require('./auth');
+const realtime = require('./realtime');
 
 const NEXT = { received: 'preparing', preparing: 'ready', ready: 'done' };
 
@@ -13,12 +14,6 @@ const NEXT = { received: 'preparing', preparing: 'ready', ready: 'done' };
 const terminalOrder = (o) => {
   const { user, ...rest } = o.toObject();
   return { ...rest, ...currentCustomer(o) };
-};
-
-/** Compara em tempo constante (o hash iguala os tamanhos). */
-const sameKey = (a, b) => {
-  const h = (s) => crypto.createHash('sha256').update(String(s)).digest();
-  return crypto.timingSafeEqual(h(a), h(b));
 };
 
 /** Inteiro finito (aceita "3" vindo do JSON, recusa 1.5, "abc", null, Infinity). */
@@ -57,6 +52,7 @@ function terminalRouter({ terminalKey }) {
     if (status === 'ready') { o.readyAt = now; o.notifiedAt = now; } else if (status !== 'done') o.readyAt = undefined;
     if (status === 'done') o.doneAt = now;
     await o.save();
+    realtime.orderChanged(o.user);
     // Aviso imediato ao aluno (chega mesmo com a app fechada).
     if (status === 'ready' && prev !== 'ready') {
       push.notifyUser(o.user, {
@@ -72,6 +68,7 @@ function terminalRouter({ terminalKey }) {
   r.post('/orders/:n/notify', wrap(async (req, res) => {
     const o = await Order.findOneAndUpdate({ number: +req.params.n }, { notifiedAt: Date.now() }, { new: true })
       .populate('user', USER_FIELDS);
+    if (o) realtime.orderChanged(o.user);
     if (o && o.status !== 'cancelled') {
       push.notifyUser(o.user && o.user._id ? o.user._id : o.user, {
         title: `Senha #${o.number} chamada`,
@@ -85,6 +82,7 @@ function terminalRouter({ terminalKey }) {
   // O bar pode anular qualquer pedido (mesmo entregue): reembolsa e repõe stock
   r.post('/orders/:n/cancel', wrap(async (req, res) => {
     const o = await cancelOrder(req.params.n, 'staff');
+    realtime.orderChanged(o.user);
     push.notifyUser(o.user, {
       title: `Pedido #${o.number} cancelado`,
       body: 'O valor foi devolvido ao teu saldo.',
@@ -108,11 +106,13 @@ function terminalRouter({ terminalKey }) {
       p = await Product.findOneAndUpdate({ itemId: +req.params.id, stock: { $gte: -n } }, { $inc: { stock: n } }, { new: true });
     }
     if (!p) throw fail('stock');
+    realtime.barChanged('stock');
     res.json({ ok: true, stock: p.stock });
   }));
 
   r.post('/paused', wrap(async (req, res) => {
     const s = await barSettings({ paused: !!req.body.paused });
+    realtime.barChanged('paused');
     res.json({ ok: true, paused: s.paused });
   }));
 

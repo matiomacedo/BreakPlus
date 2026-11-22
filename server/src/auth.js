@@ -38,6 +38,11 @@ async function registerFail(u) {
   if (u.failCount >= MAX_FAILS) { u.lockUntil = new Date(Date.now() + LOCK_MIN * 60000); u.failCount = 0; }
   await u.save();
 }
+/** Compara em tempo constante (o hash iguala os tamanhos). */
+const sameKey = (a, b) => {
+  const h = (s) => crypto.createHash('sha256').update(String(s)).digest();
+  return crypto.timingSafeEqual(h(a), h(b));
+};
 const publicUser = (u) => ({ id: u._id, name: u.name, role: u.role, roleLabel: u.roleLabel, email: u.email, avatar: u.avatar || '' });
 
-module.exports = { hash, verify, sign, auth, lockedMin, registerFail, publicUser, SECRET, MAX_FAILS };
+module.exports = { hash, verify, sign, auth, lockedMin, registerFail, publicUser, sameKey, SECRET, MAX_FAILS };

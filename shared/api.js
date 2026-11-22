@@ -2,8 +2,9 @@
    shared/api.js — ligação ao servidor, comum às duas apps.
 
    - requestJson(path, { body, headers }) → { status, data }: fetch à API.
-   - createStore({ request, statePath, actions, onConnection }): cópia local do
-     estado (atualizada de 2,5 em 2,5 s) com as leituras que as vistas usam.
+   - createStore({ request, statePath, actions, onConnection, socketAuth }): cópia
+     local do estado com as leituras que as vistas usam. Atualiza quando o
+     servidor avisa por Socket.IO; sem ligação em tempo real, de 2,5 em 2,5 s.
 
    Cada app injeta o seu `request` (o aluno com o token de sessão, o terminal
    com a chave do terminal) e as suas ações de escrita:
@@ -33,8 +34,9 @@ async function requestJson(path, { body, headers = {} } = {}) {
  * actions({ post, withOrder }) → ações de escrita desta app (ficam no objeto devolvido)
  * onConnection(ok, reason) → chamado a cada atualização (para mostrar erros de ligação)
  * cacheKey → opcional: guarda a última resposta em localStorage para abrir sem rede
+ * socketAuth() → credenciais do Socket.IO ({ token } ou { terminalKey }); sem isto, só polling
  */
-function createStore({ request, statePath, actions, onConnection = () => {}, cacheKey = null }) {
+function createStore({ request, statePath, actions, onConnection = () => {}, cacheKey = null, socketAuth = null }) {
   const whenText = (ts) => {
     const d = new Date(ts), t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     return d.toDateString() === new Date().toDateString() ? `Hoje · ${t}` : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} · ${t}`;
@@ -82,6 +84,22 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
     subscribers.forEach((fn) => fn());
   }
 
+  /* Socket.IO: o cliente vem do próprio servidor da API. Se não carregar (sem rede), fica o polling. */
+  let live = false;
+  function connectLive() {
+    if (!socketAuth) return;
+    const script = document.createElement('script');
+    script.src = API_URL + '/socket.io/socket.io.js';
+    script.onload = () => {
+      const socket = io(API_URL, { auth: (cb) => cb(socketAuth()) });
+      socket.on('connect', () => { live = true; refresh(); });     // apanha o que mudou enquanto estava desligado
+      socket.on('disconnect', () => { live = false; });
+      socket.on('connect_error', () => { live = false; });
+      socket.on('changed', () => refresh());
+    };
+    document.head.appendChild(script);
+  }
+
   const post = async (path, body) => { const r = await request(path, body); await refresh(); return r; };
   const withOrder = (r) => (r.order ? { ...r, order: normOrder(r.order) } : r);
 
@@ -100,11 +118,13 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
       return `~${Math.max(1, Math.round(data.queueSize * per))} min`;
     },
 
-    /* arranque: carrega o estado e passa a atualizar de 2,5 em 2,5 s */
+    /* arranque: carrega o estado e passa a atualizar com os avisos do servidor
+       (polling de 2,5 em 2,5 s só enquanto não houver ligação em tempo real) */
     async start() {
       await refresh();
-      setInterval(refresh, 2500);
+      setInterval(() => { if (!live) refresh(); }, 2500);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+      connectLive();
     },
     refresh,
 
