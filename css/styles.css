@@ -171,12 +171,7 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
 .cta-full { width: 100%; }
 .cta-spaced { margin-top: 14px; }
 
-/* Com letra maior ou palavras longas, o botão cresce e parte a palavra
-   em vez de a deixar de fora da pílula. */
-.cta, .ghost, .chip, .fbtn, .seg button, .resv-banner button,
-.ticket button, .q button, .auth-btn, .auth-link {
-  white-space: normal; overflow-wrap: anywhere; text-align: center;
-}
+/* Quebra de texto dos botões: regra única em shared/buttons.css. */
 
 .acts { display: flex; gap: 10px; margin-top: 16px; }
 
@@ -430,10 +425,11 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
   transform: translateX(calc(var(--idx, 0) * 100%));
   transition: transform .55s var(--spring);
 }
-/* A pílula acompanha a largura da coluna: com letra maior, "Pedidos" não
-   fica de fora do fundo colorido. */
+/* A pílula acompanha a largura da coluna e fica sempre centrada nela.
+   Sem teto de largura, não há desalinhamento em ecrãs largos. */
 .nav-ind::before {
-  content: ""; width: calc(100% - 12px); min-width: 58px; max-width: 112px;
+  content: ""; width: calc(100% - 12px); min-width: 58px;
+  margin-inline: auto;
   height: 100%; border-radius: 99px; background: var(--brand);
 }
 
@@ -441,12 +437,12 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
   position: relative; flex: 1; min-width: 0; min-height: 62px; padding: 8px 4px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-size: 14px; line-height: 18px; font-weight: 600; color: var(--mut);
-  text-align: center; overflow-wrap: anywhere;
+  text-align: center;
   transition: color .3s var(--ease);
 }
 /* Texto e ícone do item ativo usam a MESMA cor de contraste sobre o fundo
-   da cor principal (antes o texto usava --ink e o ícone --onb). */
-.nav button.on, .nav button.on span { color: var(--onb); }
+   da cor principal (o ícone herda currentColor do botão). */
+.nav button.on { color: var(--onb); }
 .nav span {
   display: flex; align-items: center; justify-content: center;
   min-height: 28px; min-width: 0; width: 100%;
