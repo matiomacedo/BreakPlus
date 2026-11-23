@@ -20,15 +20,24 @@ const Auth = (() => {
     try { localStorage.setItem(userKey(), JSON.stringify(user)); } catch { /* sem armazenamento */ }
   };
 
-  /** Overlay de carregamento (shared/boot.css): útil quando o servidor está a acordar. */
-  const boot = (message) => {
+  /** Overlay de carregamento (shared/boot.css): só aparece se a resposta demorar.
+      Assim não há um "flash" de spinner em pedidos rápidos (ou em modo offline). */
+  let bootTimer = null;
+  const boot = (message, delay = 0) => {
     const overlay = el('boot');
     if (!overlay) return;
     const text = el('boot-msg');
     if (text && message) text.textContent = message;
-    overlay.hidden = false;
+    clearTimeout(bootTimer);
+    if (delay) bootTimer = setTimeout(() => { overlay.hidden = false; }, delay);
+    else { bootTimer = null; overlay.hidden = false; }
   };
-  const bootDone = () => { const overlay = el('boot'); if (overlay) overlay.hidden = true; };
+  const bootDone = () => {
+    clearTimeout(bootTimer);
+    bootTimer = null;
+    const overlay = el('boot');
+    if (overlay) overlay.hidden = true;
+  };
 
   /** fetch ao servidor com o token. Sessão expirada → volta ao login. */
   async function api(path, body) {
@@ -47,9 +56,9 @@ const Auth = (() => {
   const allowed = (u) => !cfg.roles.length || cfg.roles.includes(u.role);
   const drawDots = () => document.querySelectorAll('#pin-dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
 
-  async function enter(user) {
+  async function enter(user, silent = false) {
     el('auth').hidden = true;
-    boot('A carregar os teus dados…');
+    if (!silent) boot('A carregar os teus dados…', 350);
     try {
       await cfg.onEnter(user);
     } finally {
@@ -70,7 +79,7 @@ const Auth = (() => {
   /** Sem ligação: mantém o token e abre com a última conta conhecida, se existir. */
   function offline() {
     const user = cachedUser();
-    if (user && allowed(user)) return enter(user);
+    if (user && allowed(user)) return enter(user, true);   // dados locais: imediatos, sem spinner
     bootDone();
     el('auth').hidden = false;
     el('auth-retry').hidden = false;
@@ -82,7 +91,7 @@ const Auth = (() => {
   async function resume() {
     if (resuming) return;
     resuming = true;
-    boot('A validar a sessão…');
+    boot('A validar a sessão…', 350);         // spinner só se o servidor demorar
     try {
       const { status, data } = await requestJson('/api/auth/me', {
         headers: token() ? { Authorization: 'Bearer ' + token() } : {},
@@ -101,25 +110,32 @@ const Auth = (() => {
     }
   }
 
+  let submitting = false;
   async function submitLogin() {
+    if (submitting) return;                 // duplo toque / Enter + toque: um só pedido
     const email = el('auth-email').value, password = el('auth-pass').value;
     if (!email || !password) return err('Preenche o email e a password');
-    boot('A entrar…');
+    submitting = true;
+    boot('A entrar…', 250);
     try {
       const r = await api('/api/auth/login', { email, password });
       if (r.ok) { preToken = r.preToken; pin = ''; drawDots(); el('auth-hello').textContent = 'Olá, ' + r.name.split(' ')[0]; return step(2); }
       err(r.reason === 'locked' ? `Demasiadas tentativas. Tenta daqui a ${r.minutes} min`
         : r.reason === 'credentials' ? 'Email ou password incorretos' : 'Sem ligação ao servidor');
     } finally {
+      submitting = false;
       bootDone();
     }
   }
 
+  let pinBusy = false;
   async function press(key) {
-    if (key === 'back') pin = pin.slice(0, -1); else if (pin.length < 4) pin += key;
+    if (key === 'back') { if (pinBusy) return; pin = pin.slice(0, -1); }
+    else if (pin.length < 4) pin += key;
     drawDots(); err('');
     if (pin.length < 4) return;
-    boot('A confirmar o PIN…');
+    pinBusy = true;
+    boot('A confirmar o PIN…', 250);
     try {
       const r = await api('/api/auth/pin', { preToken, pin });
       if (r.ok) {
@@ -135,6 +151,7 @@ const Auth = (() => {
         : r.reason === 'pin' ? (r.attemptsLeft ? `PIN incorreto · ${r.attemptsLeft} tentativas` : 'Conta bloqueada por 5 min')
         : 'Sem ligação ao servidor');
     } finally {
+      pinBusy = false;
       bootDone();
     }
   }
@@ -179,8 +196,11 @@ const Auth = (() => {
       window.visualViewport.addEventListener('resize', () => setTimeout(revealFocused, 60));
     }
 
+    /* O overlay vem visível no HTML: escondemos primeiro para que o spinner
+       só apareça de facto se a resposta demorar mais do que o pequeno atraso. */
+    bootDone();
     if (token()) resume();
-    else { bootDone(); el('auth').hidden = false; }
+    else el('auth').hidden = false;
   }
 
   return { start, api, token, logout };

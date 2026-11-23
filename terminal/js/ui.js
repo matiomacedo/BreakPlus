@@ -173,7 +173,7 @@ function orderCardHTML(o, rank = null) {
   const origin = reservation
     ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
     : 'Enviado da App Campus · Saldo pago';
-  const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '● ' : ''}${STEP_LABEL[s]}</span>`).join('');
+  const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '<i class="step-dot"></i>' : ''}${STEP_LABEL[s]}</span>`).join('');
   const priority = rank && rank.position
     ? `<span class="pill prio" title="${escapeHtml(rank.reasoning)}">${icon('zap', 'sm')}<span>${rank.position}.º a preparar</span></span>`
     : '';

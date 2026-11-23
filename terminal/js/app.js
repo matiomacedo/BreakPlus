@@ -6,6 +6,8 @@
    ========================================================================== */
 
 const orderOf = (number) => Store.get().orders.find((o) => o.number === +number);
+const writeFailed = (r) => !r || r.ok === false;
+const writeError = () => toast('Não foi possível gravar', 'O servidor não respondeu. Tenta outra vez.');
 
 const ACTIONS = {
 
@@ -16,27 +18,28 @@ const ACTIONS = {
   /* --- Fila de pedidos --- */
 
   // Avança para o passo seguinte: recebido → a preparar → pronto → entregue
-  'advance': (d, el) => {
+  'advance': guarded((d) => 'advance:' + d.number, async (d, el) => {
     const o = orderOf(d.number);
     if (!o) return;
-    if (o.status === 'received')  return void Store.setStatus(o.number, 'preparing');
-    if (o.status === 'preparing') {
-      Store.setStatus(o.number, 'ready');
-      return toast(`Pedido #${o.number} pronto`, `${o.customer} foi avisado na app. Chamada ativa no balcão.`);
+    if (o.status === 'received' || o.status === 'preparing') {
+      const next = o.status === 'received' ? 'preparing' : 'ready';
+      if (writeFailed(await Store.setStatus(o.number, next))) return writeError();
+      if (next === 'ready') toast(`Pedido #${o.number} pronto`, `${o.customer} foi avisado na app. Chamada ativa no balcão.`);
+      return;
     }
     // entregue: o cartão desvanece-se e depois sai da fila
     const card = el.closest('.order');
     if (card) card.classList.add('leaving');
-    setTimeout(() => {
-      Store.setStatus(o.number, 'done');
-      toast(`Pedido #${o.number} entregue`, 'Passou para o histórico recente.');
-    }, card ? 280 : 0);
-  },
+    await new Promise((resolve) => setTimeout(resolve, card ? 280 : 0));
+    if (writeFailed(await Store.setStatus(o.number, 'done'))) return writeError();
+    toast(`Pedido #${o.number} entregue`, 'Passou para o histórico recente.');
+  }),
 
-  'notify': (d) => {
-    Store.notify(+d.number);
-    toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${orderOf(d.number).customer}.`);
-  },
+  'notify': guarded((d) => 'notify:' + d.number, async (d) => {
+    const o = orderOf(d.number);
+    if (writeFailed(await Store.notify(+d.number))) return writeError();
+    toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${o ? o.customer : 'aluno'}.`);
+  }),
 
   // Cancelar um pedido da fila ou uma reserva (devolve o saldo e repõe o stock)
   'cancel': (d) => {
@@ -46,10 +49,10 @@ const ACTIONS = {
       title: `Cancelar ${o.type === 'reservation' ? 'reserva' : 'pedido'} #${o.number}?`,
       text: `Devolve ${eur(o.total)} a ${o.customer} e repõe o stock.`,
       okLabel: 'Cancelar e reembolsar',
-      onOk: () => {
-        Store.cancelOrder(o.number);
+      onOk: guarded(() => 'cancel:' + o.number, async () => {
+        if (writeFailed(await Store.cancelOrder(o.number))) return writeError();
         toast(`#${o.number} cancelado`, `${eur(o.total)} devolvidos a ${o.customer}.`);
-      },
+      }),
     });
   },
 
@@ -61,35 +64,39 @@ const ACTIONS = {
       title: `Anular pedido #${o.number}?`,
       text: `Devolve ${eur(o.total)} a ${o.customer} e repõe os produtos no stock.`,
       okLabel: 'Anular pedido',
-      onOk: () => {
-        Store.cancelOrder(o.number);
+      onOk: guarded(() => 'cancel:' + o.number, async () => {
+        if (writeFailed(await Store.cancelOrder(o.number))) return writeError();
         toast(`Pedido #${o.number} anulado`, `${eur(o.total)} devolvidos · stock reposto.`);
-      },
+      }),
     });
   },
 
   /* --- Reservas --- */
-  'start-reservation': (d) => {
+  'start-reservation': guarded((d) => 'reservation:' + d.number, async (d) => {
     const o = orderOf(d.number);
-    Store.setStatus(+d.number, 'preparing');
-    toast(`Reserva #${d.number} na fila`, `${o.customer} foi avisado de que a preparação começou.`);
-  },
+    if (writeFailed(await Store.setStatus(+d.number, 'preparing'))) return writeError();
+    toast(`Reserva #${d.number} na fila`, `${o ? o.customer : 'O aluno'} foi avisado de que a preparação começou.`);
+  }),
 
   /* --- Stock --- */
-  'stock-adjust': (d) => Store.adjustStock(+d.id, +d.delta),
-  'stock-toggle': (d) => {
+  'stock-adjust': guarded((d) => 'stock:' + d.id, async (d) => {
+    if (writeFailed(await Store.adjustStock(+d.id, +d.delta))) writeError();
+  }),
+  'stock-toggle': guarded((d) => 'stock:' + d.id, async (d) => {
     const qty = Store.get().stock[d.id] ?? 0;
-    const name = findItem(d.id).name;
-    if (qty > 0) { Store.setStock(+d.id, 0); toast('Produto esgotado', `${name} já não aparece como disponível na app.`); }
-    else         { Store.setStock(+d.id, 10); toast('Produto reativado (+10)', `${name} está outra vez disponível na app.`); }
-  },
+    const name = findItem(d.id)?.name || 'Produto';
+    const out = qty > 0;
+    if (writeFailed(await Store.setStock(+d.id, out ? 0 : 10))) return writeError();
+    toast(out ? 'Produto esgotado' : 'Produto reativado (+10)',
+      out ? `${name} já não aparece como disponível na app.` : `${name} está outra vez disponível na app.`);
+  }),
 
   /* --- Terminal --- */
-  'pause': () => {
+  'pause': guarded(() => 'pause', async () => {
     const paused = !Store.get().paused;
-    Store.setPaused(paused);
+    if (writeFailed(await Store.setPaused(paused))) return writeError();
     toast(paused ? 'Pedidos na hora em pausa' : 'Balcão aberto', paused ? 'Os alunos só podem reservar até retomares.' : 'Os pedidos na hora voltaram a entrar.');
-  },
+  }),
   'fullscreen': () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
@@ -105,7 +112,7 @@ document.addEventListener('click', (event) => {
   const el = event.target.closest('[data-act]');
   if (el && !el.disabled) {
     const action = ACTIONS[el.dataset.act];
-    if (action) action(el.dataset, el);
+    if (action) Promise.resolve(action(el.dataset, el)).catch(() => writeError());
     return;
   }
   if (event.target.id === 'modal') closeConfirm();    // clicar no fundo
@@ -127,7 +134,7 @@ document.addEventListener('input', (event) => {
   speed.style.setProperty('--p', input.value / 2);
   speed.querySelectorAll('.speed-labels span').forEach((label, i) => {
     label.classList.toggle('on', i === +input.value);
-    label.textContent = (i === +input.value ? '● ' : '') + STEP_LABEL[STEPS[i]];
+    label.innerHTML = (i === +input.value ? '<i class="step-dot"></i>' : '') + STEP_LABEL[STEPS[i]];
   });
 });
 
@@ -136,7 +143,10 @@ document.addEventListener('change', (event) => {
   const input = event.target.closest('.speed-input');
   if (!input) return;
   ui.dragging = false;
-  Store.setStatus(+input.dataset.number, STEPS[+input.value]);
+  const number = +input.dataset.number, status = STEPS[+input.value];
+  guarded((n) => 'speed:' + n, async (n, s) => {
+    if (writeFailed(await Store.setStatus(n, s))) writeError();
+  })(number, status);
 });
 
 document.addEventListener('pointerdown', (event) => { if (event.target.closest('.speed-input')) ui.dragging = true; });
@@ -150,12 +160,27 @@ document.addEventListener('pointercancel', endDrag);
 
 /* ---------- Arranque ---------- */
 
+/* A barra de topo pode ficar mais alta com letra maior ou ecrã mais estreito.
+   Medir a altura impede que a faixa de pausa e o aviso passem por baixo dela. */
+const topbar = document.querySelector('.topbar');
+const syncTopbarHeight = () => {
+  if (!topbar) return;
+  document.documentElement.style.setProperty('--topbar-h', Math.ceil(topbar.getBoundingClientRect().height) + 'px');
+};
+syncTopbarHeight();
+if (topbar && window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(topbar);
+else window.addEventListener('resize', syncTopbarHeight);
+
 // Sem login: o terminal abre logo na fila (a chave do terminal vai em cada pedido).
 (async () => {
+  const overlay = document.getElementById('boot');
+  // Sem spinner em arranques rápidos: mostra-o só se o servidor demorar.
+  if (overlay) overlay.hidden = true;
+  const slowTimer = setTimeout(() => { if (overlay) overlay.hidden = false; }, 350);
   try {
     await Store.start();
   } finally {
-    const overlay = document.getElementById('boot');
+    clearTimeout(slowTimer);
     if (overlay) overlay.hidden = true;
   }
   Store.subscribe(render); render(); showTab('orders');

@@ -20,6 +20,7 @@ async function requestJson(path, { body, headers = {} } = {}) {
   try {
     res = await fetch(API_URL + path, {
       method: body === undefined ? 'GET' : 'POST',
+      cache: 'no-store',                       // sessão e dados nunca vêm da cache HTTP
       headers: { 'Content-Type': 'application/json', ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -69,6 +70,7 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
   let signature = cached ? JSON.stringify(cached) : '';
   const subscribers = new Set();
   const LIVE = ['received', 'preparing', 'ready'];
+  let started = false;
 
   async function refresh() {
     const r = await request(statePath);
@@ -103,6 +105,8 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
     /* arranque: carrega o estado e passa a atualizar de 2,5 em 2,5 s */
     async start() {
       await refresh();
+      if (started) return;                     // um só temporizador mesmo depois de nova sessão
+      started = true;
       setInterval(refresh, 2500);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     },

@@ -128,6 +128,17 @@ const ITEMS = [
   },
 ];
 
+/* Preferências alimentares de cada produto: alimentam os interruptores do ecrã "Mais". */
+const DIETARY = {
+  1: [],                                               // tosta com fiambre
+  2: [],                                               // croissant com fiambre
+  3: ['vegetarian'],                                   // donut
+  4: ['vegetarian', 'glutenFree', 'lactoseFree'],       // sumo de laranja
+  5: ['vegetarian', 'glutenFree', 'lactoseFree'],       // água com aroma
+  6: ['vegetarian'],                                   // café + pastel de nata
+};
+ITEMS.forEach((item) => { item.dietary = DIETARY[item.id] || []; });
+
 const TOPUP_AMOUNTS = [5, 10, 20, 50];
 
 /* As fotos estão em images/ na raiz do projeto. A app do terminal vive em terminal/,

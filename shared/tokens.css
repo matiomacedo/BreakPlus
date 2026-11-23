@@ -1,6 +1,7 @@
 /* Tokens de design partilhados pela app dos alunos e pelo terminal. */
 
 :root {
+  color-scheme: light;                     /* controlos nativos e scrollbars acompanham o tema */
   --bg: #F4F5F7;
   --card: #fff;
   --ink: #0F172A;
@@ -11,8 +12,10 @@
   --brand: hsl(188, 80%, 18%);          /* verde-azulado escuro (cor principal) */
   --onb: #fff;                          /* texto sobre a cor principal */
   --gold: #F0A800;                      /* dourado do logótipo (detalhes) */
-  --green: #10B981;
+  --green: #047857;                        /* verde escuro: texto branco com contraste >= 4,5:1 */
+  --on-green: #fff;                        /* texto sobre fundo verde */
   --danger: #DC2626;
+  --on-danger: #fff;                       /* texto sobre fundo vermelho */
   --danger-bg: #FEE2E2;  --danger-t: #B91C1C;
 
   --chip: #F1F5F9;
@@ -22,7 +25,7 @@
   --glass: rgba(255, 255, 255, .82);
   --img: #E7EAEE;
 
-  --mint: #ECFDF5;  --mintt: #059669;   /* badge verde */
+  --mint: #ECFDF5;  --mintt: #047857;   /* badge verde */
   --warn: #FFFBEB;  --warnt: #B45309;   /* badge amarelo */
 
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, .04), 0 2px 8px -2px rgba(15, 23, 42, .06);
@@ -35,6 +38,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0A101C;
     --card: #131C2E;
     --ink: #F1F5F9;
@@ -49,9 +53,10 @@
     --thumb: #2A3A58;
     --glass: rgba(19, 28, 46, .84);
     --img: #1B2740;
+    --green: #34D399;  --on-green: #052E22;   /* verde claro com texto escuro */
     --mint: #0f2e26;  --mintt: #34D399;
     --warn: #33270f;  --warnt: #FBBF24;
-    --danger: #F87171;
+    --danger: #F87171;  --on-danger: #2A0707;
     --danger-bg: #3a1618;  --danger-t: #FCA5A5;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
     --shadow-md: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px -12px rgba(0, 0, 0, .6);

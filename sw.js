@@ -14,7 +14,7 @@
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v18';
+const CACHE_VERSION = 'breakplus-v19';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 
@@ -52,6 +52,17 @@ const APP_SHELL = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
+  /* Terminal: sem estes ficheiros, abrir /terminal e depois ficar sem rede
+     partia a navegação da app dos alunos (o HTML do terminal ia parar à
+     chave do index). Estão aqui para o terminal também abrir offline. */
+  './terminal/',
+  './terminal/index.html',
+  './terminal/config.js',
+  './terminal/css/terminal.css',
+  './terminal/js/app.js',
+  './terminal/js/store.js',
+  './terminal/js/ui.js',
+  './icons/terminal-icon-maskable-512.png',
 ];
 
 const INDEX_URL = new URL('./index.html', self.location).href;
@@ -63,7 +74,9 @@ self.addEventListener('install', (event) => {
   const requests = APP_SHELL.map((path) => new Request(new URL(path, self.location), { cache: 'reload' }));
   event.waitUntil(
     caches.open(ASSET_CACHE)
-      .then((cache) => cache.addAll(requests))
+      // Um ficheiro em falta (ex.: terminal/config.js num clone novo) não impede
+      // a instalação da cache da app dos alunos.
+      .then((cache) => Promise.all(requests.map((req) => cache.add(req).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
 });
@@ -105,15 +118,24 @@ async function cacheFirst(request, cacheName = ASSET_CACHE) {
   }
 }
 
-/** Navegação: rede primeiro; sem rede, a última cópia da app. */
+/** Navegação: rede primeiro; sem rede, a cópia DAQUELA página.
+    Guardar tudo debaixo de INDEX_URL partia a app: bastava abrir o terminal
+    para a cópia offline do index.html ser substituída pelo HTML do terminal. */
 async function navigationHandler(request) {
+  const key = new URL(request.url);
+  key.search = '';                              // start_url tem ?source=pwa
   try {
     const response = await fetch(request);
-    putInCache(ASSET_CACHE, INDEX_URL, response);
+    putInCache(ASSET_CACHE, key.href, response);
     return response;
   } catch {
-    const cached = await caches.match(INDEX_URL, { ignoreSearch: true });
-    return cached || new Response('Sem ligação', {
+    const cached = await caches.match(key.href, { ignoreSearch: true });
+    if (cached) return cached;
+    if (key.pathname === '/' || key.pathname === '/index.html') {
+      const shell = await caches.match(INDEX_URL);
+      if (shell) return shell;
+    }
+    return new Response('Sem ligação', {
       status: 503,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
@@ -127,11 +149,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Dados e sessão continuam sempre a vir da rede (a app trata da falta de ligação).
-  if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.includes('/api/')) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(navigationHandler(request));
-    return;
+    if (url.origin === self.location.origin) event.respondWith(navigationHandler(request));
+    return;                                    // nunca guardar páginas de outros sites
   }
 
   const sameOrigin = url.origin === self.location.origin;

@@ -9,18 +9,19 @@
 .auth-card p { margin: 0; color: var(--mut); }
 .auth-step { display: grid; gap: 12px; }
 .auth-step[hidden] { display: none; }
-.auth-field { width: 100%; height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--bd-strong); background: var(--card); color: var(--ink); font: inherit; font-size: 16px; }
+.auth-field { width: 100%; min-height: 48px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--bd-strong); background: var(--card); color: var(--ink); font: inherit; font-size: 16px; }
 .auth-field:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
-.auth-btn { height: 48px; border: 0; border-radius: 14px; background: var(--brand); color: var(--onb); font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.auth-btn { min-height: 48px; padding: 10px 16px; border: 0; border-radius: 14px; background: var(--brand); color: var(--onb); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 .auth-btn:active { transform: scale(.98); }
 .auth-err { min-height: 20px; color: var(--danger); font-weight: 600; }
-.auth-link { background: none; border: 0; color: var(--mut); font: inherit; font-weight: 600; cursor: pointer; padding: 8px; }
+.auth-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; background: none; border: 0; color: var(--mut); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 4px 0; }
 .pin-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--bd-strong); transition: background .15s, border-color .15s, transform .15s; }
 .pin-dots i.on { background: var(--brand); border-color: var(--brand); transform: scale(1.1); }
 .pin-dots.shake { animation: pin-shake .35s; }
 @keyframes pin-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 280px; width: 100%; margin: 0 auto; }
-.keypad button { height: 60px; border-radius: 18px; border: 1px solid var(--bd); background: var(--card); color: var(--ink); font-family: inherit; font-size: 22px; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-sm); transition: transform .1s; }
+.keypad button { min-height: 60px; border-radius: 18px; border: 1px solid var(--bd); background: var(--card); color: var(--ink); font-family: inherit; font-size: 22px; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-sm); transition: transform .1s; }
+.keypad .back .ic { width: 26px; height: 26px; vertical-align: middle; }
 .keypad button:active { transform: scale(.94); }
 .keypad .spacer { visibility: hidden; }

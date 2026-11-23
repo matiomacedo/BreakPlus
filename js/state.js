@@ -7,14 +7,17 @@
    carrinho e preferências.
    ========================================================================== */
 
-/* Preferências guardadas no dispositivo: mantêm-se depois de recarregar. */
-const PREFS_KEY = 'bp_prefs_student';
+/* Preferências guardadas no dispositivo: mantêm-se depois de recarregar.
+   A chave inclui o id da conta para trocar de aluno no mesmo telemóvel não
+   herdar as escolhas do anterior. */
+const PREFS_BASE = 'bp_prefs_student';
+let prefsKey = PREFS_BASE;
 const DEFAULT_PREFS = { vegetarian: false, glutenFree: false, lactoseFree: false, notifications: true };
 
 function loadPrefs() {
   const prefs = { ...DEFAULT_PREFS };
   try {
-    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    const saved = JSON.parse(localStorage.getItem(prefsKey) || '{}');
     for (const key of Object.keys(DEFAULT_PREFS)) {
       if (typeof saved[key] === 'boolean') prefs[key] = saved[key];
     }
@@ -23,7 +26,14 @@ function loadPrefs() {
 }
 
 function persistPrefs() {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify(state.prefs)); } catch { /* sem armazenamento */ }
+  try { localStorage.setItem(prefsKey, JSON.stringify(state.prefs)); } catch { /* sem armazenamento */ }
+}
+
+/** Chamado ao entrar: carrega as preferências da conta certa. */
+function setPrefsUser(user) {
+  const id = user && (user.id || user.email || user.name);
+  prefsKey = id ? `${PREFS_BASE}_${encodeURIComponent(String(id))}` : PREFS_BASE;
+  state.prefs = loadPrefs();
 }
 
 const state = {
@@ -58,9 +68,14 @@ const isPaused = () => db().paused;
 /* ---------- Menu e carrinho ---------- */
 
 function visibleItems() {
+  /* As preferências alimentares da app "Mais" filtram realmente o menu. */
+  const needs = Object.entries(state.prefs)
+    .filter(([key, on]) => on && ['vegetarian', 'glutenFree', 'lactoseFree'].includes(key))
+    .map(([key]) => key);
   return ITEMS.filter((item) =>
     (state.category === 'Todos' || item.category === state.category) &&
-    (state.period === 'Todos' || item.periods.includes(state.period))
+    (state.period === 'Todos' || item.periods.includes(state.period)) &&
+    needs.every((need) => (item.dietary || []).includes(need))
   );
 }
 

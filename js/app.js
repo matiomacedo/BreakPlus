@@ -72,7 +72,7 @@ function armNotificationPermission() {
         Notifications.syncPush();             // subscrição Web Push (app fechada)
       }
       if (state.view === 'more') renderMore();
-    });
+    }).catch(() => { state.prefs.notifications = false; persistPrefs(); });
   };
   document.addEventListener('pointerdown', ask, true);
 }
@@ -117,7 +117,7 @@ const ACTIONS = {
   'set-mode': (d) => { state.checkout.mode = d.mode; syncCheckout(); },
   'set-time': (d) => { state.checkout.time = d.value; syncCheckout(); },
 
-  'pay': async () => {
+  'pay': guarded(() => 'pay', async () => {
     const total = cartTotal();
     const mode = state.checkout.mode;
     if (!total) return;
@@ -149,7 +149,7 @@ const ACTIONS = {
         }
         renderTray();
         refreshCartSheet();
-        return toast(`Já não há ${findItem(result.itemId).name} suficiente`);
+        return toast(`Já não há ${findItem(result.itemId)?.name || 'um produto'} suficiente`);
       }
       if (result.reason === 'paused') { syncCheckout(); return toast('O bar acabou de pausar os pedidos na hora'); }
       if (result.reason === 'pickup') { renderSlots(); syncCheckout(); return toast(`Só podes reservar para hoje, até às ${RESERVATION.todayUntil}`); }
@@ -160,7 +160,7 @@ const ACTIONS = {
     state.checkout = { mode: 'now', day: null, time: null };
     renderTray();
     openConfirmationSheet(result.order);
-  },
+  }),
 
   /* --- Pedidos e reservas --- */
   'show-ticket':  (d) => openTicketSheet(d.id),
@@ -181,21 +181,21 @@ const ACTIONS = {
     if (order && canCancel(order)) openCancelSheet(order);
     else toast('Já não é possível cancelar esta reserva');
   },
-  'confirm-cancel': async (d) => {
+  'confirm-cancel': guarded((d) => `cancel:${d.id}`, async (d) => {
     const result = await Store.cancelOrder(+d.id, 'student');
     closeSheet();
     toast(result.ok ? `Reserva cancelada · ${eur(result.order.total)} devolvidos` : 'Já não é possível cancelar esta reserva');
-  },
+  }),
 
   /* --- Saldo --- */
   'set-topup': (d) => { state.topupAmount = +d.value; syncTopup(); },
-  'topup': async () => {
+  'topup': guarded(() => 'topup', async () => {
     const r = await Store.topup(state.topupAmount);
     toast(r.ok ? 'Saldo carregado: +' + eur(state.topupAmount) : 'Não foi possível carregar o saldo');
-  },
+  }),
 
   /* --- Mais --- */
-  'toggle-pref': async (d, el) => {
+  'toggle-pref': guarded((d) => 'pref:' + d.key, async (d, el) => {
     const turningOn = !state.prefs[d.key];
 
     // Ativar os avisos precisa de permissão do sistema (pedida neste clique).
@@ -228,8 +228,8 @@ const ACTIONS = {
         Notifications.stopPush();
       }
     }
-  },
-  'test-notification': async () => {
+  }),
+  'test-notification': guarded(() => 'test-notification', async () => {
     if (!Notifications.supported()) return toast('Este dispositivo não suporta notificações');
     const result = await Notifications.requestPermission();
     if (result !== 'granted') {
@@ -242,8 +242,8 @@ const ACTIONS = {
       tag: 'bp-test',
     });
     toast(shown ? 'Notificação de teste enviada' : 'Não foi possível mostrar a notificação');
-  },
-  'test-push': async () => {
+  }),
+  'test-push': guarded(() => 'test-push', async () => {
     if (!Notifications.supported()) return toast('Este dispositivo não suporta notificações');
     const result = await Notifications.requestPermission();
     if (result !== 'granted') {
@@ -264,11 +264,13 @@ const ACTIONS = {
         : 'Este dispositivo ainda não está subscrito. Tenta outra vez daqui a pouco');
     }
     toast(`Aviso enviado pelo servidor para ${r.sent} dispositivo${r.sent === 1 ? '' : 's'}`);
-  },
-  'install-pwa': async () => {
+  }),
+  'install-pwa': guarded(() => 'install', async () => {
     const installed = await PWA.promptInstall();
-    if (installed) toast('Break+ instalado no ecrã principal');
-  },
+    toast(installed
+      ? 'Break+ instalado no ecrã principal'
+      : 'No iPhone/iPad: Partilhar → Adicionar ao ecrã principal');
+  }),
   'logout': () => {
     try { localStorage.removeItem('bp_state_student'); } catch { /* sem armazenamento */ }
     Auth.logout();
@@ -283,7 +285,10 @@ document.addEventListener('click', (event) => {
   const el = event.target.closest('[data-action]');
   if (el && !el.disabled) {
     const action = ACTIONS[el.dataset.action];
-    if (action) action(el.dataset, el);
+    if (action) {
+      // Qualquer erro inesperado vira uma mensagem amigável (nunca um erro cru na consola).
+      Promise.resolve(action(el.dataset, el)).catch(() => toast('Não foi possível concluir. Tenta outra vez.'));
+    }
     return;
   }
   // Clicar no fundo escuro fecha o painel
@@ -382,12 +387,13 @@ Auth.start({
   roles: ['student', 'teacher'],
   onEnter: async (user) => {
     Object.assign(ME, { customer: user.name, role: user.roleLabel, avatar: user.avatar || '' });
+    setPrefsUser(user);                    // preferências desta conta (não da anterior)
     document.getElementById('greet-name').textContent = user.name.split(' ')[0];
     await Store.start();
     renderAll(); primeStore(); Store.subscribe(onStoreChange);
     updateConnectionBanner();
     armNotificationPermission();
     Notifications.syncPush();              // mantém a subscrição Web Push deste dispositivo
-    setInterval(renderBarInfo, 30000);      // a fila e as horas das reservas mudam com o tempo
+    if (!window.bpClockTimer) window.bpClockTimer = setInterval(renderBarInfo, 30000);
   },
 });

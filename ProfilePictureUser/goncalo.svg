@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Fotografia de perfil de Gonçalo Silva">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F5F6B"/>
+      <stop offset="1" stop-color="#20C6DF"/>
+    </linearGradient>
+    <clipPath id="circle">
+      <circle cx="100" cy="100" r="100"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#circle)">
+    <rect width="200" height="200" fill="url(#bg)"/>
+    <path d="M40 200c4-40 28-60 60-60s56 20 60 60z" fill="#123244"/>
+    <circle cx="100" cy="92" r="48" fill="#EFC3A0"/>
+    <path d="M52 90c0-30 22-52 48-52s48 22 48 52c0 5-1 9-2 13-6-20-18-30-32-33-9 7-24 10-39 8-8 4-15 12-19 22-2-3-3-6-4-8z" fill="#2C211B"/>
+    <path d="M78 92c3 3 7 5 11 5M111 92c3 0 7-2 11-5" stroke="#B98A6B" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <circle cx="86" cy="96" r="4" fill="#2B1B16"/>
+    <circle cx="114" cy="96" r="4" fill="#2B1B16"/>
+    <path d="M100 100v14c0 3-2 5-5 5" stroke="#CE9673" stroke-width="4" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

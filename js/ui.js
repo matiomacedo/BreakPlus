@@ -136,7 +136,9 @@ function renderTray() {
   const count = cartCount();
   $('#tray-count').textContent = plural(count, 'item', 'itens');
   $('#tray-total').textContent = 'Total ' + eur(cartTotal());
-  $('#tray').classList.toggle('show', count > 0 && state.view === 'bar');
+  const show = count > 0 && state.view === 'bar';
+  $('#tray').classList.toggle('show', show);
+  document.body.classList.toggle('has-tray', show);   /* dá espaço extra no fim da página */
   if (count > 0 && count !== lastCartCount) replay($('#tray-count'), 'bump');
   lastCartCount = count;
 }
@@ -284,9 +286,12 @@ function renderOrders() {
       ? `<div class="stack">${reservations.map(reservationCardHTML).join('')}</div>`
       : `<div class="card"><p class="desc desc-flush">Sem reservas. No carrinho, escolhe "Reservar" para levantares mais tarde.</p></div>`}`;
 
-  const history = historyOrders().map(orderRowHTML).join('');
+  const historyOrdersList = historyOrders();
+  const history = historyOrdersList.length
+    ? historyOrdersList.map(orderRowHTML).join('')
+    : '<div class="card empty-inline">Ainda não tens pedidos anteriores. Os teus pedidos aparecem aqui depois de entregues.</div>';
 
-  $('#view-orders .body').innerHTML = current + reservationsHTML + '<div class="cl sec">Anteriores</div>' + history;
+  $('#view-orders .body').innerHTML = current + reservationsHTML + (historyOrdersList.length ? '<div class="cl sec">Anteriores</div>' : '') + history;
 }
 
 /* ==========================================================================
@@ -299,11 +304,14 @@ function renderWallet({ fresh = false } = {}) {
     <button class="chip ${v === state.topupAmount ? 'on' : ''}" data-action="set-topup" data-value="${v}" aria-pressed="${v === state.topupAmount}">${eur(v)}</button>`
   ).join('');
 
-  const movements = db().wallet.transactions.map((t, i) => `
+  const transactions = db().wallet.transactions;
+  const movements = transactions.length
+    ? transactions.map((t, i) => `
     <div class="rw ${fresh && i === 0 ? 'row-new' : ''}">
       <div><b>${escapeHtml(t.label)}</b><small>${escapeHtml(t.when)}</small></div>
       <b class="${t.value > 0 ? 'pos' : ''}">${t.value > 0 ? '+' : '−'}${eur(Math.abs(t.value))}</b>
-    </div>`).join('');
+    </div>`).join('')
+    : '<div class="card empty-inline">Ainda não há movimentos. Carrega saldo para começares a pedir no bar.</div>';
 
   $('#view-wallet .body').innerHTML = `
     <div class="bigbal">
@@ -369,7 +377,7 @@ function renderMore() {
       </button>
     </div>
 
-    <div class="cl sec">Aplicação</div>
+    ${PWA.canInstall() ? '<div class="cl sec">Aplicação</div>' : ''}
     <div class="card" id="install-card" ${PWA.canInstall() ? '' : 'hidden'}>
       <button class="mrow" data-action="install-pwa">
         <div><b>Instalar no ecrã principal</b><small>Abre em ecrã completo, como uma app</small></div>
@@ -560,6 +568,7 @@ function syncPayButton() {
   }
   btn.textContent = label;
   btn.classList.toggle('disabled', disabled);
+  btn.disabled = disabled;                  // desativado a sério: não dispara a ação
   btn.setAttribute('aria-disabled', disabled);
   $('#cart-total').textContent = eur(total);
 }
