@@ -104,10 +104,11 @@ h2 { font-size: 17px; line-height: 22px; letter-spacing: -.01em; font-weight: 80
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 48px; padding: 10px 20px; border-radius: 16px;
   font-weight: 700; font-size: 15px;
+  white-space: normal; overflow-wrap: anywhere; text-align: center;
   transition: transform .25s var(--ease), background .3s var(--ease), color .3s var(--ease), box-shadow .3s var(--ease), border-color .3s var(--ease);
 }
 .btn:active { transform: scale(.96); }
-.btn.big { min-height: 60px; padding: 0 26px; font-size: 16px; font-weight: 800; border-radius: 18px; }
+.btn.big { min-height: 60px; padding: 8px 26px; font-size: 16px; font-weight: 800; border-radius: 18px; }
 .btn.icon { padding: 0; width: 48px; }
 .btn.big.icon { width: 60px; }
 .btn.wide { width: 100%; }

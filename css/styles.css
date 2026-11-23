@@ -171,6 +171,13 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
 .cta-full { width: 100%; }
 .cta-spaced { margin-top: 14px; }
 
+/* Com letra maior ou palavras longas, o botão cresce e parte a palavra
+   em vez de a deixar de fora da pílula. */
+.cta, .ghost, .chip, .fbtn, .seg button, .resv-banner button,
+.ticket button, .q button, .auth-btn, .auth-link {
+  white-space: normal; overflow-wrap: anywhere; text-align: center;
+}
+
 .acts { display: flex; gap: 10px; margin-top: 16px; }
 
 @media (hover: hover) {
@@ -183,7 +190,7 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
 /* Chips (filtros, valores de carregamento) */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .chip {
-  min-height: 44px; padding: 0 18px; border-radius: 99px;
+  min-height: 44px; padding: 8px 18px; border-radius: 99px;
   border: 1px solid var(--bd-strong); background: var(--card);
   font-weight: 600; color: var(--mut);
   transition: background .3s var(--ease), color .3s var(--ease), border-color .3s var(--ease), transform .25s var(--ease);
@@ -326,7 +333,7 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
 
 .fbtn {
   display: flex; align-items: center; gap: 8px;
-  min-height: 44px; padding: 0 16px;
+  min-height: 44px; padding: 8px 16px;
   background: var(--card); border: 1px solid var(--bd-strong); border-radius: 99px; font-weight: 600;
   transition: transform .25s var(--ease);
 }
@@ -423,20 +430,28 @@ body.has-tray .app { padding-bottom: calc(156px + env(safe-area-inset-bottom, 0p
   transform: translateX(calc(var(--idx, 0) * 100%));
   transition: transform .55s var(--spring);
 }
-.nav-ind::before { content: ""; width: 58px; height: 100%; border-radius: 99px; background: var(--brand); }
+/* A pílula acompanha a largura da coluna: com letra maior, "Pedidos" não
+   fica de fora do fundo colorido. */
+.nav-ind::before {
+  content: ""; width: calc(100% - 12px); min-width: 58px; max-width: 112px;
+  height: 100%; border-radius: 99px; background: var(--brand);
+}
 
 .nav button {
-  position: relative; flex: 1; min-height: 62px; padding: 8px 0;
+  position: relative; flex: 1; min-width: 0; min-height: 62px; padding: 8px 4px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-size: 14px; line-height: 18px; font-weight: 600; color: var(--mut);
+  text-align: center; overflow-wrap: anywhere;
   transition: color .3s var(--ease);
 }
-.nav button.on { color: var(--ink); }
+/* Texto e ícone do item ativo usam a MESMA cor de contraste sobre o fundo
+   da cor principal (antes o texto usava --ink e o ícone --onb). */
+.nav button.on, .nav button.on span { color: var(--onb); }
 .nav span {
   display: flex; align-items: center; justify-content: center;
-  min-height: 28px; min-width: 58px; transition: color .3s var(--ease), transform .3s var(--ease);
+  min-height: 28px; min-width: 0; width: 100%;
+  transition: color .3s var(--ease), transform .3s var(--ease);
 }
-.nav button.on span { color: var(--onb); }
 .nav button:active span { transform: scale(.9); }
 
 /* Bandeja do carrinho: fica escondida (invisível + sem cliques) até haver itens */
