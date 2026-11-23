@@ -105,7 +105,7 @@ function renderTicketBanner() {
   banner.hidden = !order;
   if (order) {
     const copy = TICKET_COPY[order.status];
-    $('#ticket-title').textContent = copy.title(order.number);
+    $('#ticket-title').textContent = copy.title(order.ticket);
     $('#ticket-sub').textContent = copy.sub;
     banner.classList.toggle('ready', order.status === 'ready');
     banner.querySelector('button').dataset.id = order.number;
@@ -124,7 +124,7 @@ function renderReservationBanner() {
     const detail = next.status === 'reserved' ? plural(itemsCount(next.items), 'item', 'itens')
       : next.status === 'ready' ? 'pronta para levantar' : 'a preparar';
     $('#resv-title').textContent = pickupText(next);
-    $('#resv-sub').textContent = `Reserva #${next.number} · ${detail}`;
+    $('#resv-sub').textContent = `Reserva #${next.ticket} · ${detail}`;
     banner.querySelector('button').dataset.id = next.number;
     if (!reservationBannerWasShown && state.view === 'bar') replay(banner, 'pop');
   }
@@ -160,7 +160,8 @@ function productImageHTML(item, stock) {
     <div class="pic">
       <span class="pic-fallback" aria-hidden="true"><svg class="ic"><use href="#i-utensils"/></svg></span>
       ${img}
-      <span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>
+      ${isPopular(item.id) ? '<span class="tag">Mais pedido</span>'
+        : item.tag ? `<span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>` : ''}
       ${meta && stock > 0 ? `<span class="meta">${escapeHtml(meta)}</span>` : ''}
       ${stock === 0 ? '<span class="soldout-badge">Esgotado</span>' : ''}
     </div>`;
@@ -228,7 +229,7 @@ function orderRowHTML(o) {
   const when = o.type === 'reservation' ? `Reserva · ${pickupText(o)}` : o.when;
   return `
     <div class="rw ${cancelled ? 'is-cancelled' : ''}">
-      <div><b>#${escapeHtml(o.number)} · ${escapeHtml(when)}</b><small>${escapeHtml(itemsSummary(o.items))}</small></div>
+      <div><b>#${escapeHtml(o.ticket)} · ${escapeHtml(when)}</b><small>${escapeHtml(itemsSummary(o.items))}</small></div>
       <div class="rw-end">
         <b>${eur(o.total)}</b>
         ${cancelled
@@ -246,7 +247,7 @@ function reservationCardHTML(o) {
   return `
     <div class="card resv-card">
       <div class="row">
-        <div><div class="cl">Reserva #${escapeHtml(o.number)}</div><h3>${escapeHtml(pickupText(o))}</h3></div>
+        <div><div class="cl">Reserva #${escapeHtml(o.ticket)}</div><h3>${escapeHtml(pickupText(o))}</h3></div>
         <span class="b v ${isLive(o) ? 'live' : ''}">${STATUS_TEXT[o.status]}</span>
       </div>
       <p class="desc">${escapeHtml(itemsSummary(o.items))}</p>
@@ -264,7 +265,7 @@ function liveOrderCardHTML(o) {
   return `
     <div class="card">
       <div class="row">
-        <div><div class="cl">Em curso</div><h3>Pedido #${escapeHtml(o.number)}</h3></div>
+        <div><div class="cl">Em curso</div><h3>Pedido #${escapeHtml(o.ticket)}</h3></div>
         <span class="b v live">${STATUS_TEXT[o.status]}</span>
       </div>
       <ol class="steps">${steps}</ol>
@@ -631,7 +632,7 @@ function openTicketSheet(number) {
     ? `Levantamento ${pickupText(order)}`
     : STATUS_TEXT[order.status] + (order.status === 'ready' ? ' · levanta no balcão' : '');
   openSheet(`
-    <h2>${reservation ? `Reserva #${escapeHtml(order.number)}` : `Senha #${escapeHtml(order.number)}`}</h2>
+    <h2>${reservation ? `Reserva #${escapeHtml(order.ticket)}` : `Senha #${escapeHtml(order.ticket)}`}</h2>
     <p class="desc">${escapeHtml(status)}</p>
     <div class="qr"></div>
     ${closeButtonHTML('Fechar', 'cta')}`);
@@ -643,7 +644,7 @@ function openConfirmationSheet(order) {
     <div class="done" aria-hidden="true">
       <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M16 27l7 7 13-14"/></svg>
     </div>
-    <h2 class="center">${reservation ? 'Reserva' : 'Pedido'} #${escapeHtml(order.number)} confirmad${reservation ? 'a' : 'o'}</h2>
+    <h2 class="center">${reservation ? 'Reserva' : 'Pedido'} #${escapeHtml(order.ticket)} confirmad${reservation ? 'a' : 'o'}</h2>
     <p class="desc center">${reservation
       ? `Levanta no balcão ${escapeHtml(pickupText(order))}. Mostra este código.`
       : 'Mostra este código no balcão.'}</p>
@@ -653,7 +654,7 @@ function openConfirmationSheet(order) {
 
 function openCancelSheet(order) {
   openSheet(`
-    <h2>Cancelar reserva #${escapeHtml(order.number)}?</h2>
+    <h2>Cancelar reserva #${escapeHtml(order.ticket)}?</h2>
     <p class="desc">${escapeHtml(pickupText(order))} · ${escapeHtml(itemsSummary(order.items))}</p>
     <p class="desc">Vais receber ${eur(order.total)} de volta no teu saldo.</p>
     <div class="acts">

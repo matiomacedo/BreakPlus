@@ -1,7 +1,7 @@
 /* ==========================================================================
    auth.js — login da app dos alunos/docentes: email + password, depois o
    PIN do cartão num keypad 0–9. Arranque: Auth.start({ key, roles, onEnter }).
-   (O terminal do bar não tem login: ver terminal/js/store.js.)
+   Também usado pelo terminal do bar, só para contas com o papel "staff".
    ========================================================================== */
 
 const Auth = (() => {
@@ -148,7 +148,7 @@ const Auth = (() => {
       const dots = el('pin-dots'); dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake');
       if (r.reason === 'expired') { step(1); return err('A sessão expirou. Entra outra vez'); }
       err(r.reason === 'locked' ? `Conta bloqueada. Tenta daqui a ${r.minutes} min`
-        : r.reason === 'pin' ? (r.attemptsLeft ? `PIN incorreto · ${r.attemptsLeft} tentativas` : 'Conta bloqueada por 5 min')
+        : r.reason === 'pin' ? `PIN incorreto · ${r.attemptsLeft} tentativas`
         : 'Sem ligação ao servidor');
     } finally {
       pinBusy = false;

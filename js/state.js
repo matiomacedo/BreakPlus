@@ -64,6 +64,8 @@ const db = () => Store.get();
 const balance = () => db().wallet.balance;
 const stockOf = (id) => db().stock[id] ?? 0;
 const isPaused = () => db().paused;
+/** "Mais pedido": calculado no servidor a partir dos pedidos reais (vazio sem pedidos suficientes). */
+const isPopular = (id) => (db().popular || []).includes(id);
 
 /* ---------- Menu e carrinho ---------- */
 
@@ -74,7 +76,7 @@ function visibleItems() {
     .map(([key]) => key);
   return ITEMS.filter((item) =>
     (state.category === 'Todos' || item.category === state.category) &&
-    (state.period === 'Todos' || item.periods.includes(state.period)) &&
+    (state.period === 'Todos' || (state.period === 'Destaques' ? isPopular(item.id) : item.periods.includes(state.period))) &&
     needs.every((need) => (item.dietary || []).includes(need))
   );
 }
@@ -122,10 +124,10 @@ const STATUS_TEXT = {
 
 /* ---------- Horários das reservas ---------- */
 
-/** Demonstração: alguns horários aparecem "esgotados" (em produção viria do servidor). */
+/** Hora esgotada: já tem RESERVATION.slotCapacity reservas (dados do servidor, GET /api/state → slots). */
 function isSlotFull(key, time) {
-  const hash = [...(key + time)].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 7);
-  return hash % 6 === 0;
+  const slots = db().slots;
+  return !!slots && slots.key === key && slots.full.includes(time);
 }
 
 /** Horários de um dia: [{ time: '12:30', full: false }, ...] */

@@ -14,7 +14,7 @@
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v19';
+const CACHE_VERSION = 'breakplus-v23';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 
@@ -57,7 +57,6 @@ const APP_SHELL = [
      chave do index). Estão aqui para o terminal também abrir offline. */
   './terminal/',
   './terminal/index.html',
-  './terminal/config.js',
   './terminal/css/terminal.css',
   './terminal/js/app.js',
   './terminal/js/store.js',
@@ -74,8 +73,7 @@ self.addEventListener('install', (event) => {
   const requests = APP_SHELL.map((path) => new Request(new URL(path, self.location), { cache: 'reload' }));
   event.waitUntil(
     caches.open(ASSET_CACHE)
-      // Um ficheiro em falta (ex.: terminal/config.js num clone novo) não impede
-      // a instalação da cache da app dos alunos.
+      // Um ficheiro em falta não impede a instalação da cache da app dos alunos.
       .then((cache) => Promise.all(requests.map((req) => cache.add(req).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
@@ -149,7 +147,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Dados e sessão continuam sempre a vir da rede (a app trata da falta de ligação).
-  if (url.pathname.includes('/api/')) return;
+  if (url.pathname.includes('/api/') || url.pathname.startsWith('/socket.io/')) return;
 
   if (request.mode === 'navigate') {
     if (url.origin === self.location.origin) event.respondWith(navigationHandler(request));

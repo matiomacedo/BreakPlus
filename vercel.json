@@ -51,12 +51,6 @@
       ]
     },
     {
-      "source": "/terminal/config.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
-      ]
-    },
-    {
       "source": "/api/:path*",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" }

@@ -2,7 +2,7 @@ node_modules/
 .env
 # Build da Vercel (gerado por scripts/build-config.js)
 dist/
-# Chave do terminal (copiar de terminal/config.example.js)
+# Antiga chave do terminal (já não usada: o terminal tem login). Nunca vai para o git.
 terminal/config.js
 # Ficheiro duplicado do .env criado por engano (não usado)
 server/env

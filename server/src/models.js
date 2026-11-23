@@ -2,7 +2,7 @@ const { Schema, model } = require('mongoose');
 
 const User = model('User', new Schema({
   name: { type: String, required: true },
-  role: { type: String, enum: ['student', 'teacher'], default: 'student' },
+  role: { type: String, enum: ['student', 'teacher', 'staff'], default: 'student' },   // staff = funcionárias do bar (terminal)
   roleLabel: { type: String, default: 'Estudante' },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   avatar: { type: String, default: '', trim: true },   // URL ou nome do ficheiro em ProfilePictureUser/
@@ -19,8 +19,9 @@ const Product = model('Product', new Schema({
   stock: { type: Number, default: 0, min: 0 },
 }));
 
-const Order = model('Order', new Schema({
-  number: { type: Number, unique: true, index: true },
+const OrderSchema = new Schema({
+  number: { type: Number, unique: true, index: true },    // identificador único e sequencial (interno)
+  ticket: Number, ticketDay: String,                       // senha do dia (recomeça em 1 todos os dias, Lisboa)
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
   customer: String, role: String,   // cópia no momento do pedido (fallback se a conta for apagada)
   type: { type: String, enum: ['now', 'reservation'] },
@@ -28,17 +29,22 @@ const Order = model('Order', new Schema({
   items: { type: Schema.Types.Mixed },                     // { itemId: qty }
   total: Number,
   pickupKey: String, pickupTime: String,
-  pickupAt: Number,                                         // hora de levantamento (ms), calculada no cliente
+  pickupAt: Number,                                         // hora de levantamento (ms), calculada no servidor (Lisboa)
   queuedAt: Number, readyAt: Number, doneAt: Number, cancelledAt: Number,   // carimbos (ms) usados no terminal
   notifiedAt: { type: Number, default: 0 },
   cancelledBy: { type: String, enum: ['student', 'staff', null], default: null },
-}, { timestamps: true }));
+  cancelledByName: { type: String, default: null },        // quem anulou (nome da funcionária ou do aluno)
+  actions: [{ _id: false, action: String, by: String, at: Number }],   // o que o bar fez ao pedido e quem
+}, { timestamps: true });
+OrderSchema.index({ createdAt: -1 });                      // "Mais pedido" lê os pedidos dos últimos dias
+const Order = model('Order', OrderSchema);
 
 const Transaction = model('Transaction', new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
   kind: { type: String, enum: ['topup', 'order', 'refund'] },
   amount: Number,                                           // + entra, − sai
   order: Number,
+  ticket: Number,                                           // senha do pedido (para o texto do movimento)
 }, { timestamps: true }));
 
 // Subscrição Web Push de um dispositivo (uma por endpoint; a mesma conta pode ter várias)
@@ -49,10 +55,16 @@ const PushSubscription = model('PushSubscription', new Schema({
   createdAt: { type: Date, default: Date.now },
 }));
 
-// Estado global do bar (pausa) + contador de senhas + chaves VAPID (geradas uma vez)
+// Ocupação de cada hora de levantamento (reservas ativas). O índice único evita duas contagens para a mesma hora.
+const SlotSchema = new Schema({ key: String, time: String, count: { type: Number, default: 0 } });
+SlotSchema.index({ key: 1, time: 1 }, { unique: true });
+const Slot = model('Slot', SlotSchema);
+
+// Estado global do bar (pausa) + contador de pedidos + senha do dia + chaves VAPID (geradas uma vez)
 const Setting = model('Setting', new Schema({
   _id: String, paused: { type: Boolean, default: false }, lastNumber: { type: Number, default: 100 },
+  ticketDay: String, lastTicket: { type: Number, default: 0 },
   vapidPublicKey: String, vapidPrivateKey: String,
 }));
 
-module.exports = { User, Product, Order, Transaction, PushSubscription, Setting };
+module.exports = { User, Product, Order, Transaction, PushSubscription, Setting, Slot };

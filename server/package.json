@@ -6,6 +6,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "seed": "node src/seed.js",
+    "create-staff": "node src/create-staff.js",
     "test": "node --test --test-concurrency=1 'test/*.test.js'"
   },
   "dependencies": {
@@ -14,9 +15,11 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.0",
+    "socket.io": "4.8.4",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "mongodb-memory-server": "10.4.3"
+    "mongodb-memory-server": "10.4.3",
+    "socket.io-client": "4.8.4"
   }
 }
