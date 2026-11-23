@@ -689,6 +689,44 @@ body.is-offline .toast { top: calc(62px + env(safe-area-inset-top, 0px)); }
 .sw.on:active::after { transform: translateX(16px); }
 
 
+/* 9b. CAFÉ OFERECIDO (issue #11) ------------------------------------------ */
+
+.mrow-ic {
+  flex: none; display: grid; place-items: center;
+  width: 42px; min-height: 42px; border-radius: 14px;
+  background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand);
+}
+.mrow-ic .ic { width: 21px; height: 21px; }
+
+.gift-card h3 { margin-top: 4px; overflow-wrap: anywhere; }
+.gift-card .b { flex: none; }
+.gift-note {
+  margin-top: 10px; padding: 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--brand) 7%, transparent);
+  color: var(--mut); font-size: 14px; line-height: 20px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+.gift-label { display: block; margin: 14px 0 6px; color: var(--mut); font-size: 14px; font-weight: 700; }
+.gift-field {
+  width: 100%; min-height: 48px; padding: 10px 14px;
+  border: 1px solid var(--bd-strong); border-radius: 14px;
+  background: var(--card); color: var(--ink);
+  font: inherit; font-size: 16px; line-height: 22px;      /* 16px evita zoom no iPhone */
+}
+.gift-field:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+textarea.gift-field { min-height: 88px; resize: vertical; }
+.gift-err { min-height: 20px; margin-top: 6px; color: var(--danger); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.gift-price { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 14px; color: var(--mut); font-size: 14px; }
+.gift-price b { color: var(--ink); font-size: 16px; }
+
+.gift-contact { display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 12px; border-radius: 16px; background: var(--chip); }
+.gift-contact .av { flex: none; }
+.gift-contact div { min-width: 0; }
+.gift-contact b, .gift-contact small { display: block; overflow-wrap: anywhere; }
+.gift-contact small { color: var(--mut); }
+
+
 /* 10. MOVIMENTO REDUZIDO -------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {

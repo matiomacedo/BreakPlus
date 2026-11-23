@@ -32,7 +32,7 @@ async function requestJson(path, { body, headers = {} } = {}) {
 
 /**
  * request(path, body?) → resposta JSON do servidor
- * actions({ post, withOrder }) → ações de escrita desta app (ficam no objeto devolvido)
+ * actions({ request, post, withOrder }) → ações de escrita desta app (ficam no objeto devolvido)
  * onConnection(ok, reason) → chamado a cada atualização (para mostrar erros de ligação)
  * cacheKey → opcional: guarda a última resposta em localStorage para abrir sem rede
  * socketAuth() → credenciais do Socket.IO ({ token }); sem isto, só polling
@@ -42,16 +42,33 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
     const d = new Date(ts), t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     return d.toDateString() === new Date().toDateString() ? `Hoje · ${t}` : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} · ${t}`;
   };
-  const TX_LABEL = { topup: () => 'Carregamento de saldo', refund: (t) => `Reembolso · pedido #${t.ticket ?? t.order}`, order: (t) => `Pedido #${t.ticket ?? t.order}` };
+  const TX_LABEL = {
+    topup: () => 'Carregamento de saldo',
+    refund: (t) => `Reembolso · pedido #${t.ticket ?? t.order}`,
+    order: (t) => `Pedido #${t.ticket ?? t.order}`,
+    gift: (t) => `Café oferecido a ${t.giftName || 'um colega'}`,
+    gift_refund: () => 'Reembolso · café não levantado',
+  };
 
   // ticket: senha do dia (os pedidos antigos, sem senha, mostram o número sequencial)
   const normOrder = (o) => ({ ...o, ticket: o.ticket ?? o.number, when: whenText(o.createdAt), notifiedAt: o.notifiedAt || 0 });
-  const normWallet = (w) => ({ balance: w.balance, transactions: w.transactions.map((t) => ({ label: TX_LABEL[t.kind](t), when: whenText(t.createdAt), value: t.amount })) });
-  const emptyState = () => ({ stock: {}, paused: false, queueSize: 0, avgPrepSec: null, wallet: { balance: 0, transactions: [] }, orders: [] });
+  const normGift = (g) => ({ ...g, when: whenText(g.createdAt) });
+  const normWallet = (w) => ({ balance: w.balance, transactions: w.transactions.map((t) => ({
+    label: (TX_LABEL[t.kind] || (() => 'Movimento de saldo'))(t), when: whenText(t.createdAt), value: t.amount,
+  })) });
+  const emptyState = () => ({
+    stock: {}, paused: false, queueSize: 0, avgPrepSec: null,
+    wallet: { balance: 0, transactions: [] }, orders: [],
+    gifts: { received: [], sent: [] },
+  });
   const hydrate = (r) => ({
     ...r,
     orders: Array.isArray(r.orders) ? r.orders.map(normOrder) : [],
     wallet: r.wallet ? normWallet(r.wallet) : emptyState().wallet,
+    gifts: {
+      received: Array.isArray(r.gifts?.received) ? r.gifts.received.map(normGift) : [],
+      sent: Array.isArray(r.gifts?.sent) ? r.gifts.sent.map(normGift) : [],
+    },
   });
 
   /** Última resposta boa (para a app abrir com dados quando não há rede). */
@@ -134,6 +151,6 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
     refresh,
 
     /* escrita (assíncrona: devolve o resultado do servidor) */
-    ...actions({ post, withOrder }),
+    ...actions({ request, post, withOrder }),
   };
 }

@@ -350,6 +350,81 @@ function switchRowHTML(key, label, hint) {
     </div>`;
 }
 
+/** Cartões da aba Mais: ofertas por levantar (com ação) e ofertas já enviadas. */
+function giftCardsHTML() {
+  const received = receivedGifts();
+  const receivedHTML = received.length ? `
+    <div class="cl sec">Cafés que te ofereceram</div>
+    <div class="stack">${received.map((g) => `
+      <div class="card gift-card">
+        <div class="row">
+          <div>
+            <div class="cl">Recebido · ${escapeHtml(g.when)}</div>
+            <h3>Café oferecido por ${escapeHtml(g.fromName || 'um colega')}</h3>
+            ${g.message ? `<p class="gift-note">“${escapeHtml(g.message)}”</p>` : ''}
+          </div>
+          <span class="b v">Por levantar</span>
+        </div>
+        <button class="cta cta-full cta-spaced" data-action="claim-gift" data-code="${escapeHtml(g.code)}">Levantar café agora</button>
+      </div>`).join('')}</div>` : '';
+
+  const sent = sentGifts();
+  const sentHTML = sent.length ? `
+    <div class="cl sec">Cafés que ofereceste</div>
+    <div class="card">${sent.map((g) => `
+      <div class="mrow">
+        <div><b>Para ${escapeHtml(g.toName || g.toEmail)}</b><small>${escapeHtml(g.when)}${g.message ? ` · “${escapeHtml(g.message)}”` : ''}</small></div>
+        <span class="b ${g.status === 'pending' ? '' : 'v'}">${giftStatusText(g)}</span>
+      </div>`).join('')}</div>` : '';
+
+  return receivedHTML + sentHTML;
+}
+
+/** 1.º passo da oferta: email do colega. */
+function openGiftEmailSheet() {
+  const draft = state.gift;
+  openSheet(`
+    <h2>Oferecer um café</h2>
+    <p class="desc">Pagas ${eur(giftPrice())} do teu saldo. O colega recebe um aviso e levanta o café no bar quando quiser.</p>
+    <label class="gift-label" for="gift-email">Email do colega</label>
+    <input class="gift-field" id="gift-email" type="email" inputmode="email" autocomplete="off"
+           placeholder="nome@ipvc.pt" value="${escapeHtml(draft.email)}">
+    <p class="gift-err" id="gift-err" role="alert"></p>
+    <button class="cta cta-full" data-action="gift-lookup">Ver contacto</button>
+    ${closeButtonHTML('Cancelar', 'ghost cta-spaced')}`);
+  setTimeout(() => document.getElementById('gift-email')?.focus(), 320);
+}
+
+/** 2.º passo: confirmar quem recebe e escrever a mensagem. */
+function openGiftConfirmSheet() {
+  const c = state.gift.contact || {};
+  openSheet(`
+    <h2>Confirmar oferta</h2>
+    <div class="gift-contact">
+      <span class="av" aria-hidden="true">${escapeHtml((c.name || '?')[0])}</span>
+      <div><b>${escapeHtml(c.name || '')}</b><small>${escapeHtml(c.email || '')}${c.role ? ` · ${escapeHtml(c.role)}` : ''}</small></div>
+    </div>
+    <label class="gift-label" for="gift-message">Mensagem (opcional)</label>
+    <textarea class="gift-field" id="gift-message" rows="3" maxlength="${GIFT.maxMessage}"
+              placeholder="Escreve algo simpático…">${escapeHtml(state.gift.message)}</textarea>
+    <p class="gift-err" id="gift-err" role="alert"></p>
+    <p class="gift-price">Total a pagar <b>${eur(giftPrice())}</b></p>
+    <div class="acts">
+      <button class="ghost" data-action="open-gift">Voltar</button>
+      <button class="cta" data-action="gift-send">Pagar e oferecer</button>
+    </div>`, { swap: true });
+}
+
+function openClaimSheet(gift) {
+  openSheet(`
+    <h2>Levantar café oferecido</h2>
+    <p class="desc">${escapeHtml(gift.fromName || 'Um colega')} ofereceu-te este café${gift.message ? ` com a mensagem “${escapeHtml(gift.message)}”` : ''}. Entra na fila do bar com senha, sem custo.</p>
+    <div class="acts">
+      <button class="ghost" data-action="close-sheet">Agora não</button>
+      <button class="cta" data-action="confirm-claim" data-code="${escapeHtml(gift.code)}">Levantar agora</button>
+    </div>`);
+}
+
 function renderMore() {
   const avatar = avatarSrc(ME.avatar);
   $('#view-more .body').innerHTML = `
@@ -359,6 +434,16 @@ function renderMore() {
         : ''}</span>
       <div><b>${escapeHtml(ME.customer)}</b><small>${escapeHtml(ME.role)} · IPVC ESTG</small></div>
     </div>
+
+    <div class="cl sec">Café para um colega</div>
+    <div class="card">
+      <button class="mrow gift-promo" data-action="open-gift">
+        <span class="mrow-ic"><svg class="ic"><use href="#i-gift"/></svg></span>
+        <div><b>Oferecer um café</b><small>Pagas ${eur(giftPrice())} e um colega levanta quando quiser</small></div>
+      </button>
+    </div>
+
+    ${giftCardsHTML()}
 
     <div class="cl sec">Preferências alimentares</div>
     <div class="card">

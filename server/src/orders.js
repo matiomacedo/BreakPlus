@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { Product, Order, User, Transaction, Setting, Slot } = require('./models');
 const { inTx } = require('./db');
 const { fail } = require('./http');
+const { lisbonDateKey } = require('./time');
 
 const LIVE = ['received', 'preparing', 'ready'];
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -39,6 +40,22 @@ const pushAction = (entry) => ({ actions: { $each: [entry], $slice: -MAX_ACTIONS
 
 /** Número a mostrar (senha do dia; os pedidos antigos, sem senha, mostram o número sequencial). */
 const ticketOf = (o) => o.ticket ?? o.number;
+
+/** Pedido para a app do aluno: id do utilizador como valor simples + `mine` + nome/função atuais. */
+const orderOut = (o, uid) => {
+  const obj = o.toObject();
+  const userId = obj.user && obj.user._id ? obj.user._id : obj.user;
+  return { ...obj, user: userId, mine: String(userId) === String(uid), ...currentCustomer(o) };
+};
+
+/** Número único e senha do dia (Lisboa), alocados dentro da transação do pedido/levantamento. */
+async function nextOrderTicket(session) {
+  const today = lisbonDateKey();
+  const set = await barSettings({ $inc: { lastNumber: 1 } }, session);
+  const ticket = set.ticketDay === today ? set.lastTicket + 1 : 1;
+  await barSettings({ ticketDay: today, lastTicket: ticket }, session);
+  return { number: set.lastNumber, ticket, ticketDay: today };
+}
 
 /** "Mais pedido": os produtos com mais unidades pedidas nos últimos `days` dias (pedidos cancelados não contam).
     Com menos de `minUnits` unidades no total não há dados suficientes e não se destaca nenhum. */
@@ -80,8 +97,11 @@ const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session)
   if (o.type === 'reservation') {                            // liberta o lugar na hora de levantamento
     await Slot.updateOne({ key: o.pickupKey, time: o.pickupTime, count: { $gt: 0 } }, { $inc: { count: -1 } }, { session });
   }
-  await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
-  await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number, ticket: o.ticket }], { session });
+  // Um pedido de oferta custou 0 € ao destinatário: não há saldo a devolver nem movimento falso.
+  if (o.total > 0) {
+    await User.updateOne({ _id: o.user }, { $inc: { balance: o.total } }, { session });
+    await Transaction.create([{ user: o.user, kind: 'refund', amount: o.total, order: o.number, ticket: o.ticket }], { session });
+  }
   clearPopularCache();
   o.status = 'cancelled'; o.cancelledBy = by; o.cancelledByName = name; o.cancelledAt = Date.now();
   if (by === 'staff') { o.actions.push({ action: 'cancelled', by: name, at: o.cancelledAt }); o.actions.splice(0, o.actions.length - MAX_ACTIONS); }
@@ -89,4 +109,4 @@ const cancelOrder = (id, { by, name }, check = () => {}) => inTx(async (session)
   return o;
 });
 
-module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, clearPopularCache, findOrder, pushAction, ticketOf, cancelOrder };
+module.exports = { LIVE, r2, USER_FIELDS, currentCustomer, barSettings, queueStats, popularItems, clearPopularCache, findOrder, pushAction, ticketOf, orderOut, nextOrderTicket, cancelOrder };

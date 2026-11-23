@@ -51,6 +51,9 @@ const state = {
 
   topupAmount: 10,
 
+  // Rascunho da oferta de café (email → contacto confirmado → mensagem)
+  gift: { email: '', message: '', contact: null },
+
   // Preferências (ecrã "Mais"), persistidas em localStorage
   prefs: loadPrefs(),
 };
@@ -66,6 +69,14 @@ const stockOf = (id) => db().stock[id] ?? 0;
 const isPaused = () => db().paused;
 /** "Mais pedido": calculado no servidor a partir dos pedidos reais (vazio sem pedidos suficientes). */
 const isPopular = (id) => (db().popular || []).includes(id);
+
+/* ---------- Cafés oferecidos (issue #11) ---------- */
+
+const receivedGifts = () => (db().gifts?.received || []).filter((g) => g.status === 'pending');
+const sentGifts = () => db().gifts?.sent || [];
+/** Preço do café oferecido: vem sempre do catálogo partilhado, não de texto solto. */
+const giftPrice = () => findItem(GIFT.itemId)?.price ?? 0.8;
+const giftStatusText = (g) => ({ pending: 'Por levantar', claimed: 'Levantado', refunded: 'Reembolsado' }[g.status] || g.status);
 
 /* ---------- Menu e carrinho ---------- */
 

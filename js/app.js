@@ -45,6 +45,30 @@ document.addEventListener('visibilitychange', () => {
 
 updateConnectionBanner();
 
+/** Motivos da API de ofertas → texto claro (nunca mostramos o erro cru ao aluno). */
+function giftError(reason) {
+  return ({
+    invalid_email: 'Introduz um email válido',
+    self_gift: 'Não podes oferecer um café a ti próprio',
+    recipient_not_found: 'Não encontrámos essa conta no IPVC',
+    message: `A mensagem é demasiado longa (máx. ${GIFT.maxMessage} caracteres)`,
+    balance: 'Saldo insuficiente para oferecer o café',
+    stock: 'Não há cafés disponíveis neste momento',
+    already_claimed: 'Este café já foi levantado',
+    expired: 'Esta oferta já expirou',
+    forbidden: 'Este café não é para ti',
+    not_found: 'Não encontrámos essa oferta',
+    network: 'Sem ligação ao servidor. Tenta outra vez.',
+  })[reason] || 'Não foi possível concluir. Tenta outra vez.';
+}
+
+/** Erro no painel da oferta, no sítio (o toast dá o mesmo aviso). */
+function setGiftError(message) {
+  const el = document.getElementById('gift-err');
+  if (el) el.textContent = message;
+  if (message) toast(message, 3000);
+}
+
 /** Aviso do sistema: além do toast, aparece na central de notificações. */
 function notifySystem(title, body, tag) {
   if (!state.prefs.notifications) return;
@@ -197,6 +221,48 @@ const ACTIONS = {
     toast(r.ok ? 'Saldo carregado: +' + eur(state.topupAmount) : 'Não foi possível carregar o saldo');
   }),
 
+  /* --- Café oferecido (issue #11) --- */
+  'open-gift': () => {
+    // "Voltar" do 2.º passo preserva o email e a mensagem já escritos.
+    if (!state.gift) state.gift = { email: '', message: '', contact: null };
+    openGiftEmailSheet();
+  },
+  'gift-lookup': guarded(() => 'gift-lookup', async () => {
+    const email = document.getElementById('gift-email')?.value.trim() || '';
+    if (!email) return setGiftError('Introduz o email do colega');
+    state.gift.email = email;
+    const r = await Store.lookupGiftContact(email);
+    if (!r || !r.ok) return setGiftError(giftError(r && r.reason));
+    state.gift.contact = r.contact;
+    openGiftConfirmSheet();
+  }),
+  'gift-send': guarded(() => 'gift-send', async () => {
+    const message = document.getElementById('gift-message')?.value.trim() || '';
+    state.gift.message = message;
+    const r = await Store.sendGift({ email: state.gift.email, message });
+    if (!r || !r.ok) return setGiftError(giftError(r && r.reason));
+    const name = r.gift?.toName || state.gift.contact?.name || 'um colega';
+    state.gift = { email: '', message: '', contact: null };
+    closeSheet();
+    if (state.view === 'more') renderMore();
+    toast(`Café oferecido a ${name}`, 3000);
+  }),
+  'claim-gift': (d) => {
+    const gift = receivedGifts().find((g) => g.code === d.code);
+    if (gift) openClaimSheet(gift);
+    else toast('Esse café já não está disponível');
+  },
+  'confirm-claim': guarded((d) => `claim:${d.code}`, async (d) => {
+    const r = await Store.claimGift(d.code);
+    closeSheet();
+    if (!r || !r.ok) {
+      if (state.view === 'more') renderMore();
+      return toast(giftError(r && r.reason), 4000);
+    }
+    toast('Café na fila do bar · mostra a senha no balcão', 4000);
+    openConfirmationSheet(r.order);
+  }),
+
   /* --- Mais --- */
   'toggle-pref': guarded((d) => 'pref:' + d.key, async (d, el) => {
     const turningOn = !state.prefs[d.key];
@@ -298,9 +364,13 @@ document.addEventListener('click', (event) => {
   if (event.target.id === 'sheet') closeSheet();
 });
 
-// Esc fecha o painel
+// Esc fecha o painel; Enter no email da oferta avança para o contacto.
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeSheet();
+  if (event.key === 'Enter' && event.target.id === 'gift-email') {
+    event.preventDefault();
+    ACTIONS['gift-lookup']();
+  }
 });
 
 
@@ -322,6 +392,25 @@ function changed(zone, value) {
 }
 
 const mySignature = () => myOrders().map((o) => [o.number, o.status, o.notifiedAt || 0, o.pickupTime]);
+
+/* Café oferecido: avisa assim que aparece uma oferta nova (o Web Push cobre a app fechada). */
+let knownGiftIds = null;
+function announceGifts() {
+  const received = db().gifts?.received || [];
+  const ids = new Set(received.map((g) => g.id));
+  if (knownGiftIds) {
+    for (const g of received) {
+      if (knownGiftIds.has(g.id)) continue;
+      const from = g.fromName || 'um colega';
+      toast(`Tens um café oferecido por ${from}`, 5000);
+      notifySystem(`Tens um café oferecido por ${from}`,
+        g.message ? `Mensagem: “${g.message}” · levanta no bar quando quiseres` : 'Abre a app para o levantar no bar.',
+        `bp-gift-${g.code}`);
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+    }
+  }
+  knownGiftIds = ids;
+}
 
 /** Avisa o aluno do que o bar fez aos pedidos dele (pronto, chamada, anulação). */
 function announceBarActions() {
@@ -373,6 +462,11 @@ function onStoreChange() {
     syncPayButton();
   }
   lastTxCount = d.wallet.transactions.length;
+
+  if (changed('gifts', d.gifts)) {
+    announceGifts();
+    if (state.view === 'more') renderMore();
+  }
 }
 
 /** Regista o estado inicial (sem desenhar) para o primeiro evento só reagir a mudanças reais. */
@@ -381,8 +475,10 @@ function primeStore() {
   changed('menu', [d.stock, d.paused]);
   changed('mine', mySignature());
   changed('wallet', d.wallet);
+  changed('gifts', d.gifts);
   lastTxCount = d.wallet.transactions.length;
   announceBarActions();
+  announceGifts();       // regista as ofertas atuais sem avisar (já estavam no estado inicial)
 }
 
 Auth.start({

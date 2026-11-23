@@ -56,7 +56,9 @@ function terminalRouter() {
     // Aviso imediato ao aluno (chega mesmo com a app fechada).
     if (status === 'ready' && prev !== 'ready') {
       push.notifyUser(updated.user, {
-        title: `Pedido #${ticketOf(updated)} pronto!`,
+        title: updated.giftFromName
+          ? `Café oferecido por ${updated.giftFromName} pronto!`
+          : `Pedido #${ticketOf(updated)} pronto!`,
         body: 'Levanta no balcão e mostra a senha.',
         tag: `bp-order-${updated.number}-ready`,
       });
@@ -88,7 +90,7 @@ function terminalRouter() {
     realtime.orderChanged(o.user);
     push.notifyUser(o.user, {
       title: `Pedido #${ticketOf(o)} cancelado`,
-      body: 'O valor foi devolvido ao teu saldo.',
+      body: o.giftCode ? 'O bar anulou este café oferecido.' : 'O valor foi devolvido ao teu saldo.',
       tag: `bp-order-${o.number}-cancel`,
     });
     await o.populate('user', USER_FIELDS);

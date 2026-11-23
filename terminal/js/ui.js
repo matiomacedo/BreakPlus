@@ -68,10 +68,15 @@ const emptyHTML = (title, text) => `
 
 const roleBadge = (o) => (o.role && o.role !== 'Estudante' ? `<span class="role">${escapeHtml(o.role)}</span>` : '');
 
-const linesHTML = (items) => Object.entries(items).map(([id, qty]) => {
+const linesHTML = (items, free = false) => Object.entries(items).map(([id, qty]) => {
   const item = findItem(id);
-  return `<li><span>${qty}× ${escapeHtml(item.name)}</span><b>${eur(qty * item.price)}</b></li>`;
+  return `<li><span>${qty}× ${escapeHtml(item.name)}</span><b>${free ? '0,00€' : eur(qty * item.price)}</b></li>`;
 }).join('');
+
+/** Café pago por outra pessoa: identifica quem ofereceu e que não há cobrança no balcão. */
+const giftPill = (o) => o.giftCode
+  ? `<span class="pill gift" title="Café pago por ${escapeHtml(o.giftFromName || 'um colega')}">${icon('gift', 'sm')}<span>Oferta${o.giftFromName ? ` · ${escapeHtml(o.giftFromName)}` : ''}</span></span>`
+  : '';
 
 /* ==========================================================================
    Fila com prioridade justa (shared/queue.js)
@@ -170,9 +175,11 @@ function orderCardHTML(o, rank = null) {
   const isNew = !ui.first && !ui.known.has(o.number);
   const changedStatus = ui.lastStatus[o.number] && ui.lastStatus[o.number] !== o.status;
   const reservation = o.type === 'reservation';
-  const origin = reservation
-    ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
-    : 'Enviado da App Campus · Saldo pago';
+  const origin = o.giftCode
+    ? `${icon('gift', 'sm')}Café oferecido por ${escapeHtml(o.giftFromName || 'um colega')} · sem custo`
+    : reservation
+      ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
+      : 'Enviado da App Campus · Saldo pago';
   const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '<i class="step-dot"></i>' : ''}${STEP_LABEL[s]}</span>`).join('');
   const priority = rank && rank.position
     ? `<span class="pill prio" title="${escapeHtml(rank.reasoning)}">${icon('zap', 'sm')}<span>${rank.position}.º a preparar</span></span>`
@@ -193,6 +200,7 @@ function orderCardHTML(o, rank = null) {
         </div>
       </div>
       <div class="pills">
+        ${giftPill(o)}
         ${priority}
         ${o.status === 'ready'
           ? `<span class="pill ok" data-since="${escapeHtml(o.readyAt)}" data-late="0">${icon('check', 'sm')}<span>${sinceText(o.readyAt)}</span></span>`
@@ -201,7 +209,7 @@ function orderCardHTML(o, rank = null) {
       </div>
     </header>
 
-    <ul class="lines">${linesHTML(o.items)}</ul>
+    <ul class="lines">${linesHTML(o.items, !!o.giftCode)}</ul>
 
     <div class="controls">
       <div class="speed" style="--p:${step / 2}">
@@ -230,6 +238,7 @@ function historyItemHTML(o) {
         <b class="price">${eur(o.total)}</b>
       </div>
       <div class="hist-items">${escapeHtml(itemsSummary(o.items))}</div>
+      ${giftPill(o)}
       ${cancelled
         ? `<span class="pill">${o.mine ? 'Reembolsado na app' : 'Anulado'}</span>`
         : `<button class="btn soft-danger" data-act="undo" data-number="${escapeHtml(o.number)}">${icon('undo')}Anular pedido (reembolso + stock)</button>`}

@@ -5,7 +5,7 @@ function loadSharedData() {
   const src = fs.readFileSync(path.resolve(__dirname, '..', process.env.DATA_JS || '../shared/data.js'), 'utf8');
   const sandbox = { document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null, setItem() {} } };
   sandbox.window = sandbox;
-  return vm.runInNewContext(src + '\n;({ ITEMS: typeof ITEMS!=="undefined"?ITEMS:[], RESERVATION, BAR })', sandbox);
+  return vm.runInNewContext(src + '\n;({ ITEMS: typeof ITEMS!=="undefined"?ITEMS:[], RESERVATION, BAR, GIFT: typeof GIFT!=="undefined"?GIFT:null })', sandbox);
 }
 
 module.exports = { loadSharedData };

@@ -148,6 +148,8 @@ h2 { font-size: 17px; line-height: 22px; letter-spacing: -.01em; font-weight: 80
 .pill.state.st-low { background: var(--warn); color: var(--warnt); }
 .pill.state.st-out { background: var(--danger); color: var(--on-danger); }
 .pill.prio { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+.pill.gift { background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--warnt); border-color: color-mix(in srgb, var(--gold) 50%, transparent); }
+.hist .pill.gift { margin-bottom: 8px; }
 .prio-note { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; color: var(--mut); font-size: 14px; line-height: 19px; }
 .prio-note .ic { width: 14px; height: 14px; margin-top: 1px; color: var(--brand); }
 

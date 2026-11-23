@@ -8,11 +8,13 @@ try { config = loadConfig(); } catch (e) { console.error(e.message); process.exi
 
 const { createApp } = require('./app');
 const { assertReplicaSet } = require('./db');
+const { ensureCatalogue } = require('./catalogue');
 const realtime = require('./realtime');
 
 (async () => {
   await mongoose.connect(config.mongoUri);
   await assertReplicaSet();
+  await ensureCatalogue();                  // idempotente: cria só os Produtos que ainda não existem
   if (!config.corsOrigins.length) console.warn('Aviso: CORS_ORIGINS vazio, nenhuma página noutra origem consegue usar a API.');
   const commit = process.env.RENDER_GIT_COMMIT;
   const server = http.createServer(createApp(config));

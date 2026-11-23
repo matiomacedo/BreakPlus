@@ -13,6 +13,13 @@ const BAR = {
   prep: '~5 min',
 };
 
+/* Regras do café oferecido a um colega (o preço vem sempre do produto no servidor). */
+const GIFT = {
+  itemId: 7,          // "Café Espresso" no catálogo abaixo
+  expireDays: 30,     // uma oferta não levantada é reembolsada ao autor passado este prazo
+  maxMessage: 120,    // mensagem opcional curta
+};
+
 /* Regras das reservas (levantamento mais tarde, pago com saldo). */
 const RESERVATION = {
   stepMin: 30,            // intervalo entre horas disponíveis
@@ -128,6 +135,21 @@ const ITEMS = [
     badges: [{ text: 'Delta Cafés' }, { text: 'Canela & Açúcar', style: 'warn' }],
     periods: ['Almoço'],
   },
+  {
+    id: 7,
+    complexity: 1,
+    prepMin: 1,
+    image: '',                 // ícone neutro; a foto não é precisa para um espresso
+    category: 'Bebidas',
+    subtitle: 'Café',
+    name: 'Café Espresso',
+    description: 'Espresso Delta de lote superior. Podes oferecer um a um colega na aba Mais.',
+    price: 0.80,
+    priceLabel: 'Preço Bar',
+    meta: '~1 min',
+    badges: [{ text: 'Delta Cafés' }],
+    periods: ['Almoço', 'Jantar', 'Bar'],
+  },
 ];
 
 /* Preferências alimentares de cada produto: alimentam os interruptores do ecrã "Mais". */
@@ -138,6 +160,7 @@ const DIETARY = {
   4: ['vegetarian', 'glutenFree', 'lactoseFree'],       // sumo de laranja
   5: ['vegetarian', 'glutenFree', 'lactoseFree'],       // água com aroma
   6: ['vegetarian'],                                   // café + pastel de nata
+  7: ['vegetarian', 'glutenFree', 'lactoseFree'],       // espresso
 };
 ITEMS.forEach((item) => { item.dietary = DIETARY[item.id] || []; });
 

@@ -2,22 +2,18 @@
    de um aluno/docente; /auth/me serve qualquer papel (o terminal também valida a sessão aqui). */
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { User, Product, Order, Transaction, PushSubscription, Slot } = require('./models');
+const { User, Product, Order, Transaction, PushSubscription, Slot, Gift } = require('./models');
 const { verify, sign, auth, studentAuth, takeAttempt, failAttempt, lockMinutes, publicUser, SECRET, MAX_FAILS } = require('./auth');
 const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
-const { r2, barSettings, queueStats, popularItems, clearPopularCache, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
+const { r2, barSettings, queueStats, popularItems, clearPopularCache, cancelOrder, USER_FIELDS, orderOut, nextOrderTicket } = require('./orders');
+const { refundExpired, giftOut } = require('./gifts');
 const push = require('./push');
 const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
 const { loadSharedData } = require('./shared-data');
 
 const { RESERVATION, BAR } = loadSharedData();     // mesmas regras que a app (shared/data.js)
-const orderOut = (o, uid) => {
-  const obj = o.toObject();
-  const userId = obj.user && obj.user._id ? obj.user._id : obj.user;
-  return { ...obj, user: userId, mine: String(userId) === String(uid), ...currentCustomer(o) };
-};
 
 /**
  * Porque é que a hora de levantamento não serve (Europe/Lisbon), ou null se servir:
@@ -157,17 +153,24 @@ function studentRouter() {
 
   // Estado da app: só os pedidos e a carteira de quem tem sessão + fila global (tempo de espera) + "Mais pedido"
   r.get('/state', studentAuth, wrap(async (req, res) => {
-    const [products, set, orders, txs, stats, popular, slots] = await Promise.all([
+    // Um café não levantado há 30 dias volta ao saldo de quem ofereceu (uma vez só).
+    const refunded = await refundExpired();
+    const me = refunded.some((id) => String(id) === String(req.user._id))
+      ? await User.findById(req.user._id) : req.user;
+    const [products, set, orders, txs, received, sent, stats, popular, slots] = await Promise.all([
       Product.find(), barSettings(),
       Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       Transaction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50),
+      Gift.find({ to: req.user._id }).sort({ createdAt: -1 }).limit(50),
+      Gift.find({ from: req.user._id }).sort({ createdAt: -1 }).limit(50),
       queueStats(), popularItems(), slotsToday(),
     ]);
     res.json({
       stock: Object.fromEntries(products.map((p) => [p.itemId, p.stock])),
       paused: set.paused, ...stats, popular, slots,
-      wallet: { balance: req.user.balance, transactions: txs },
+      wallet: { balance: me.balance, transactions: txs },
       orders: orders.map((o) => orderOut(o, req.user._id)),
+      gifts: { received: received.map(giftOut), sent: sent.map(giftOut) },
     });
   }));
 
@@ -209,12 +212,9 @@ function studentRouter() {
       const u = await User.findOneAndUpdate({ _id: req.user._id, balance: { $gte: total } }, { $inc: { balance: -total } }, { session, new: true });
       if (!u) throw fail('balance', {}, 402);
       // Número único (sequencial) + senha do dia: a primeira senha de cada dia (Lisboa) é 1.
-      const today = lisbonDateKey();
-      const s2 = await barSettings({ $inc: { lastNumber: 1 } }, session);
-      const ticket = s2.ticketDay === today ? s2.lastTicket + 1 : 1;
-      await barSettings({ ticketDay: today, lastTicket: ticket }, session);
+      const { number, ticket, ticketDay } = await nextOrderTicket(session);
       const [order] = await Order.create([{
-        number: s2.lastNumber, ticket, ticketDay: today, user: u._id, customer: u.name, role: u.roleLabel, type, items, total,
+        number, ticket, ticketDay, user: u._id, customer: u.name, role: u.roleLabel, type, items, total,
         status: reservation ? 'reserved' : 'received',
         ...(reservation ? { pickupKey, pickupTime, pickupAt } : {}), queuedAt: type === 'now' ? Date.now() : undefined,
       }], { session });

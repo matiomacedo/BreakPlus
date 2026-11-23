@@ -34,17 +34,39 @@ const OrderSchema = new Schema({
   notifiedAt: { type: Number, default: 0 },
   cancelledBy: { type: String, enum: ['student', 'staff', null], default: null },
   cancelledByName: { type: String, default: null },        // quem anulou (nome da funcionária ou do aluno)
+  giftCode: String, giftFrom: String, giftFromName: String, giftMessage: String,  // pedido de uma oferta (0 €)
   actions: [{ _id: false, action: String, by: String, at: Number }],   // o que o bar fez ao pedido e quem
 }, { timestamps: true });
 OrderSchema.index({ createdAt: -1 });                      // "Mais pedido" lê os pedidos dos últimos dias
 const Order = model('Order', OrderSchema);
 
+/* Um café pago por um aluno e levantado por outro quando quiser.
+   O saldo sai na criação; o stock e a senha só são alocados no levantamento.
+   `status` usa compare-and-set (pending → claimed/refunded) para uma oferta
+   nunca ser levantada duas vezes, mesmo com pedidos em simultâneo. */
+const GiftSchema = new Schema({
+  code: { type: String, required: true, unique: true, index: true },
+  from: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  fromName: String,
+  to: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  toName: String,
+  toEmail: { type: String, required: true, lowercase: true, trim: true },
+  itemId: Number, productName: String, amount: Number,
+  message: { type: String, default: '' },
+  status: { type: String, enum: ['pending', 'claimed', 'refunded'], default: 'pending' },
+  expiresAt: { type: Number, required: true },             // ms; reembolso preguiçoso ao fim de GIFT.expireDays
+  claimedAt: Number, refundedAt: Number, order: Number,    // senha do pedido criado no levantamento
+}, { timestamps: true });
+GiftSchema.index({ status: 1, expiresAt: 1 });
+const Gift = model('Gift', GiftSchema);
+
 const Transaction = model('Transaction', new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
-  kind: { type: String, enum: ['topup', 'order', 'refund'] },
+  kind: { type: String, enum: ['topup', 'order', 'refund', 'gift', 'gift_refund'] },
   amount: Number,                                           // + entra, − sai
   order: Number,
   ticket: Number,                                           // senha do pedido (para o texto do movimento)
+  gift: String, giftName: String,                           // código e nome da outra pessoa (movimentos de oferta)
 }, { timestamps: true }));
 
 // Subscrição Web Push de um dispositivo (uma por endpoint; a mesma conta pode ter várias)
@@ -67,4 +89,4 @@ const Setting = model('Setting', new Schema({
   vapidPublicKey: String, vapidPrivateKey: String,
 }));
 
-module.exports = { User, Product, Order, Transaction, PushSubscription, Setting, Slot };
+module.exports = { User, Product, Order, Gift, Transaction, PushSubscription, Setting, Slot };
