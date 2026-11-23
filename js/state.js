@@ -74,8 +74,8 @@ const isPopular = (id) => (db().popular || []).includes(id);
 
 const receivedGifts = () => (db().gifts?.received || []).filter((g) => g.status === 'pending');
 const sentGifts = () => db().gifts?.sent || [];
-/** Preço do café oferecido: vem sempre do catálogo partilhado, não de texto solto. */
-const giftPrice = () => findItem(GIFT.itemId)?.price ?? 0.8;
+/** Preço do café oferecido: o servidor envia o preço real da base de dados. */
+const giftPrice = () => db().giftPrice ?? findItem(GIFT.itemId)?.price ?? 0.8;
 const giftStatusText = (g) => ({ pending: 'Por levantar', claimed: 'Levantado', refunded: 'Reembolsado' }[g.status] || g.status);
 
 /* ---------- Menu e carrinho ---------- */

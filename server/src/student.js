@@ -13,7 +13,7 @@ const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
 const { loadSharedData } = require('./shared-data');
 
-const { RESERVATION, BAR } = loadSharedData();     // mesmas regras que a app (shared/data.js)
+const { RESERVATION, BAR, GIFT, ITEMS } = loadSharedData();   // mesmas regras que a app (shared/data.js)
 
 /**
  * Porque é que a hora de levantamento não serve (Europe/Lisbon), ou null se servir:
@@ -165,8 +165,13 @@ function studentRouter() {
       Gift.find({ from: req.user._id }).sort({ createdAt: -1 }).limit(50),
       queueStats(), popularItems(), slotsToday(),
     ]);
+    // O preço da oferta é o preço real da base de dados (pode ter sido ajustado no Atlas);
+    // a app mostra este valor em vez de um texto fixo, para não prometer 0,80 € e cobrar outro.
+    const giftProduct = products.find((p) => p.itemId === GIFT.itemId);
+    const giftFallback = ITEMS.find((i) => i.id === GIFT.itemId)?.price ?? 0.8;
     res.json({
       stock: Object.fromEntries(products.map((p) => [p.itemId, p.stock])),
+      giftPrice: r2(giftProduct?.price ?? giftFallback),
       paused: set.paused, ...stats, popular, slots,
       wallet: { balance: me.balance, transactions: txs },
       orders: orders.map((o) => orderOut(o, req.user._id)),

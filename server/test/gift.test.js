@@ -33,6 +33,11 @@ test('o arranque cria o café canónico sem alterar preço, nome ou stock já co
   const tosta = await Product.findOne({ itemId: 1 });
   assert.deepEqual([tosta.name, tosta.price, tosta.stock], ['Tosta da casa', 9.99, 3]);
   assert.equal(await ensureCatalogue(), 0);                   // idempotente
+
+  // A app mostra o preço que a API realmente cobra, mesmo se o café tiver outro preço na BD.
+  await Product.updateOne({ itemId: 7 }, { $set: { price: 0.7 } });
+  const state = await call('/api/state', { token: await login(), method: 'GET' });
+  assert.equal(state.body.giftPrice, 0.7);
 });
 
 test('oferecer desconta quem oferece; levantar não desconta quem recebe e só aí desce o stock', async () => {
