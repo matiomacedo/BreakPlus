@@ -45,6 +45,30 @@ document.addEventListener('visibilitychange', () => {
 
 updateConnectionBanner();
 
+/** Motivos da API de ofertas → texto claro (nunca mostramos o erro cru ao aluno). */
+function giftError(reason) {
+  return ({
+    invalid_email: 'Introduz um email válido',
+    self_gift: 'Não podes oferecer um café a ti próprio',
+    recipient_not_found: 'Não encontrámos essa conta no IPVC',
+    message: `A mensagem é demasiado longa (máx. ${GIFT.maxMessage} caracteres)`,
+    balance: 'Saldo insuficiente para oferecer o café',
+    stock: 'Não há cafés disponíveis neste momento',
+    already_claimed: 'Este café já foi levantado',
+    expired: 'Esta oferta já expirou',
+    forbidden: 'Este café não é para ti',
+    not_found: 'Não encontrámos essa oferta',
+    network: 'Sem ligação ao servidor. Tenta outra vez.',
+  })[reason] || 'Não foi possível concluir. Tenta outra vez.';
+}
+
+/** Erro no painel da oferta, no sítio (o toast dá o mesmo aviso). */
+function setGiftError(message) {
+  const el = document.getElementById('gift-err');
+  if (el) el.textContent = message;
+  if (message) toast(message, 3000);
+}
+
 /** Aviso do sistema: além do toast, aparece na central de notificações. */
 function notifySystem(title, body, tag) {
   if (!state.prefs.notifications) return;
@@ -72,7 +96,7 @@ function armNotificationPermission() {
         Notifications.syncPush();             // subscrição Web Push (app fechada)
       }
       if (state.view === 'more') renderMore();
-    });
+    }).catch(() => { state.prefs.notifications = false; persistPrefs(); });
   };
   document.addEventListener('pointerdown', ask, true);
 }
@@ -117,7 +141,7 @@ const ACTIONS = {
   'set-mode': (d) => { state.checkout.mode = d.mode; syncCheckout(); },
   'set-time': (d) => { state.checkout.time = d.value; syncCheckout(); },
 
-  'pay': async () => {
+  'pay': guarded(() => 'pay', async () => {
     const total = cartTotal();
     const mode = state.checkout.mode;
     if (!total) return;
@@ -149,9 +173,11 @@ const ACTIONS = {
         }
         renderTray();
         refreshCartSheet();
-        return toast(`Já não há ${findItem(result.itemId).name} suficiente`);
+        return toast(`Já não há ${findItem(result.itemId)?.name || 'um produto'} suficiente`);
       }
       if (result.reason === 'paused') { syncCheckout(); return toast('O bar acabou de pausar os pedidos na hora'); }
+      if (result.reason === 'slot_full') { ensureCheckoutDay(); renderSlots(); syncCheckout(); return toast('Essa hora acabou de esgotar. Escolhe outra'); }
+      if (result.reason === 'lead') { ensureCheckoutDay(); renderSlots(); syncCheckout(); return toast(`Essa hora já não tem ${RESERVATION.minLeadMin} min de antecedência. Escolhe outra`); }
       if (result.reason === 'pickup') { renderSlots(); syncCheckout(); return toast(`Só podes reservar para hoje, até às ${RESERVATION.todayUntil}`); }
       return toast('Não foi possível concluir o pedido');
     }
@@ -160,7 +186,7 @@ const ACTIONS = {
     state.checkout = { mode: 'now', day: null, time: null };
     renderTray();
     openConfirmationSheet(result.order);
-  },
+  }),
 
   /* --- Pedidos e reservas --- */
   'show-ticket':  (d) => openTicketSheet(d.id),
@@ -181,21 +207,64 @@ const ACTIONS = {
     if (order && canCancel(order)) openCancelSheet(order);
     else toast('Já não é possível cancelar esta reserva');
   },
-  'confirm-cancel': async (d) => {
-    const result = await Store.cancelOrder(+d.id, 'student');
+  'confirm-cancel': guarded((d) => `cancel:${d.id}`, async (d) => {
+    const order = db().orders.find((o) => o.number == d.id);
+    const result = order ? await Store.cancelOrder(order._id) : { ok: false };
     closeSheet();
     toast(result.ok ? `Reserva cancelada · ${eur(result.order.total)} devolvidos` : 'Já não é possível cancelar esta reserva');
-  },
+  }),
 
   /* --- Saldo --- */
   'set-topup': (d) => { state.topupAmount = +d.value; syncTopup(); },
-  'topup': async () => {
+  'topup': guarded(() => 'topup', async () => {
     const r = await Store.topup(state.topupAmount);
     toast(r.ok ? 'Saldo carregado: +' + eur(state.topupAmount) : 'Não foi possível carregar o saldo');
+  }),
+
+  /* --- Café oferecido (issue #11) --- */
+  'open-gift': () => {
+    // "Voltar" do 2.º passo preserva o email e a mensagem já escritos.
+    if (!state.gift) state.gift = { email: '', message: '', contact: null };
+    openGiftEmailSheet();
   },
+  'gift-lookup': guarded(() => 'gift-lookup', async () => {
+    const email = document.getElementById('gift-email')?.value.trim() || '';
+    if (!email) return setGiftError('Introduz o email do colega');
+    state.gift.email = email;
+    const r = await Store.lookupGiftContact(email);
+    if (!r || !r.ok) return setGiftError(giftError(r && r.reason));
+    state.gift.contact = r.contact;
+    openGiftConfirmSheet();
+  }),
+  'gift-send': guarded(() => 'gift-send', async () => {
+    const message = document.getElementById('gift-message')?.value.trim() || '';
+    state.gift.message = message;
+    const r = await Store.sendGift({ email: state.gift.email, message });
+    if (!r || !r.ok) return setGiftError(giftError(r && r.reason));
+    const name = r.gift?.toName || state.gift.contact?.name || 'um colega';
+    state.gift = { email: '', message: '', contact: null };
+    closeSheet();
+    if (state.view === 'more') renderMore();
+    toast(`Café oferecido a ${name}`, 3000);
+  }),
+  'claim-gift': (d) => {
+    const gift = receivedGifts().find((g) => g.code === d.code);
+    if (gift) openClaimSheet(gift);
+    else toast('Esse café já não está disponível');
+  },
+  'confirm-claim': guarded((d) => `claim:${d.code}`, async (d) => {
+    const r = await Store.claimGift(d.code);
+    closeSheet();
+    if (!r || !r.ok) {
+      if (state.view === 'more') renderMore();
+      return toast(giftError(r && r.reason), 4000);
+    }
+    toast('Café na fila do bar · mostra a senha no balcão', 4000);
+    openConfirmationSheet(r.order);
+  }),
 
   /* --- Mais --- */
-  'toggle-pref': async (d, el) => {
+  'toggle-pref': guarded((d) => 'pref:' + d.key, async (d, el) => {
     const turningOn = !state.prefs[d.key];
 
     // Ativar os avisos precisa de permissão do sistema (pedida neste clique).
@@ -228,8 +297,8 @@ const ACTIONS = {
         Notifications.stopPush();
       }
     }
-  },
-  'test-notification': async () => {
+  }),
+  'test-notification': guarded(() => 'test-notification', async () => {
     if (!Notifications.supported()) return toast('Este dispositivo não suporta notificações');
     const result = await Notifications.requestPermission();
     if (result !== 'granted') {
@@ -242,8 +311,8 @@ const ACTIONS = {
       tag: 'bp-test',
     });
     toast(shown ? 'Notificação de teste enviada' : 'Não foi possível mostrar a notificação');
-  },
-  'test-push': async () => {
+  }),
+  'test-push': guarded(() => 'test-push', async () => {
     if (!Notifications.supported()) return toast('Este dispositivo não suporta notificações');
     const result = await Notifications.requestPermission();
     if (result !== 'granted') {
@@ -264,11 +333,13 @@ const ACTIONS = {
         : 'Este dispositivo ainda não está subscrito. Tenta outra vez daqui a pouco');
     }
     toast(`Aviso enviado pelo servidor para ${r.sent} dispositivo${r.sent === 1 ? '' : 's'}`);
-  },
-  'install-pwa': async () => {
+  }),
+  'install-pwa': guarded(() => 'install', async () => {
     const installed = await PWA.promptInstall();
-    if (installed) toast('Break+ instalado no ecrã principal');
-  },
+    toast(installed
+      ? 'Break+ instalado no ecrã principal'
+      : 'No iPhone/iPad: Partilhar → Adicionar ao ecrã principal');
+  }),
   'logout': () => {
     try { localStorage.removeItem('bp_state_student'); } catch { /* sem armazenamento */ }
     Auth.logout();
@@ -283,16 +354,23 @@ document.addEventListener('click', (event) => {
   const el = event.target.closest('[data-action]');
   if (el && !el.disabled) {
     const action = ACTIONS[el.dataset.action];
-    if (action) action(el.dataset, el);
+    if (action) {
+      // Qualquer erro inesperado vira uma mensagem amigável (nunca um erro cru na consola).
+      Promise.resolve(action(el.dataset, el)).catch(() => toast('Não foi possível concluir. Tenta outra vez.'));
+    }
     return;
   }
   // Clicar no fundo escuro fecha o painel
   if (event.target.id === 'sheet') closeSheet();
 });
 
-// Esc fecha o painel
+// Esc fecha o painel; Enter no email da oferta avança para o contacto.
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeSheet();
+  if (event.key === 'Enter' && event.target.id === 'gift-email') {
+    event.preventDefault();
+    ACTIONS['gift-lookup']();
+  }
 });
 
 
@@ -315,6 +393,25 @@ function changed(zone, value) {
 
 const mySignature = () => myOrders().map((o) => [o.number, o.status, o.notifiedAt || 0, o.pickupTime]);
 
+/* Café oferecido: avisa assim que aparece uma oferta nova (o Web Push cobre a app fechada). */
+let knownGiftIds = null;
+function announceGifts() {
+  const received = db().gifts?.received || [];
+  const ids = new Set(received.map((g) => g.id));
+  if (knownGiftIds) {
+    for (const g of received) {
+      if (knownGiftIds.has(g.id)) continue;
+      const from = g.fromName || 'um colega';
+      toast(`Tens um café oferecido por ${from}`, 5000);
+      notifySystem(`Tens um café oferecido por ${from}`,
+        g.message ? `Mensagem: “${g.message}” · levanta no bar quando quiseres` : 'Abre a app para o levantar no bar.',
+        `bp-gift-${g.code}`);
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+    }
+  }
+  knownGiftIds = ids;
+}
+
 /** Avisa o aluno do que o bar fez aos pedidos dele (pronto, chamada, anulação). */
 function announceBarActions() {
   const mine = myOrders();
@@ -324,19 +421,19 @@ function announceBarActions() {
       if (!before) continue;
       if (o.status !== before.status) {
         if (o.status === 'ready' && state.prefs.notifications) {
-          toast(`Pedido #${o.number} pronto! Levanta no balcão`, 4000);
-          notifySystem(`Pedido #${o.number} pronto!`, 'Levanta no balcão e mostra a senha.', `bp-order-${o.number}-ready`);
+          toast(`Pedido #${o.ticket} pronto! Levanta no balcão`, 4000);
+          notifySystem(`Pedido #${o.ticket} pronto!`, 'Levanta no balcão e mostra a senha.', `bp-order-${o.number}-ready`);
           if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
         } else if (o.status === 'preparing' && before.status === 'reserved') {
-          toast(`A tua reserva #${o.number} já está a ser preparada`, 3000);
-          notifySystem(`Reserva #${o.number} a preparar`, `Já estamos a preparar o teu pedido para ${o.pickupTime || 'hoje'}.`, `bp-order-${o.number}-preparing`);
+          toast(`A tua reserva #${o.ticket} já está a ser preparada`, 3000);
+          notifySystem(`Reserva #${o.ticket} a preparar`, `Já estamos a preparar o teu pedido para ${o.pickupTime || 'hoje'}.`, `bp-order-${o.number}-preparing`);
         } else if (o.status === 'cancelled' && o.cancelledBy === 'staff') {
-          toast(`Pedido #${o.number} anulado pelo bar · ${eur(o.total)} devolvidos`, 4000);
-          notifySystem(`Pedido #${o.number} anulado pelo bar`, `${eur(o.total)} devolvidos ao teu saldo.`, `bp-order-${o.number}-cancelled`);
+          toast(`Pedido #${o.ticket} anulado pelo bar · ${eur(o.total)} devolvidos`, 4000);
+          notifySystem(`Pedido #${o.ticket} anulado pelo bar`, `${eur(o.total)} devolvidos ao teu saldo.`, `bp-order-${o.number}-cancelled`);
         }
       } else if ((o.notifiedAt || 0) > before.notified && state.prefs.notifications) {
-        toast(`O bar está a chamar a senha #${o.number}`, 4000);
-        notifySystem(`Senha #${o.number} chamada`, 'Dirige-te ao balcão do bar.', `bp-order-${o.number}-call`);
+        toast(`O bar está a chamar a senha #${o.ticket}`, 4000);
+        notifySystem(`Senha #${o.ticket} chamada`, 'Dirige-te ao balcão do bar.', `bp-order-${o.number}-call`);
       }
     }
   }
@@ -365,6 +462,11 @@ function onStoreChange() {
     syncPayButton();
   }
   lastTxCount = d.wallet.transactions.length;
+
+  if (changed('gifts', d.gifts)) {
+    announceGifts();
+    if (state.view === 'more') renderMore();
+  }
 }
 
 /** Regista o estado inicial (sem desenhar) para o primeiro evento só reagir a mudanças reais. */
@@ -373,8 +475,10 @@ function primeStore() {
   changed('menu', [d.stock, d.paused]);
   changed('mine', mySignature());
   changed('wallet', d.wallet);
+  changed('gifts', d.gifts);
   lastTxCount = d.wallet.transactions.length;
   announceBarActions();
+  announceGifts();       // regista as ofertas atuais sem avisar (já estavam no estado inicial)
 }
 
 Auth.start({
@@ -382,12 +486,13 @@ Auth.start({
   roles: ['student', 'teacher'],
   onEnter: async (user) => {
     Object.assign(ME, { customer: user.name, role: user.roleLabel, avatar: user.avatar || '' });
+    setPrefsUser(user);                    // preferências desta conta (não da anterior)
     document.getElementById('greet-name').textContent = user.name.split(' ')[0];
     await Store.start();
     renderAll(); primeStore(); Store.subscribe(onStoreChange);
     updateConnectionBanner();
     armNotificationPermission();
     Notifications.syncPush();              // mantém a subscrição Web Push deste dispositivo
-    setInterval(renderBarInfo, 30000);      // a fila e as horas das reservas mudam com o tempo
+    if (!window.bpClockTimer) window.bpClockTimer = setInterval(renderBarInfo, 30000);
   },
 });

@@ -13,12 +13,20 @@ const BAR = {
   prep: '~5 min',
 };
 
+/* Regras do café oferecido a um colega (o preço vem sempre do produto no servidor). */
+const GIFT = {
+  itemId: 7,          // "Café Espresso" no catálogo abaixo
+  expireDays: 30,     // uma oferta não levantada é reembolsada ao autor passado este prazo
+  maxMessage: 120,    // mensagem opcional curta
+};
+
 /* Regras das reservas (levantamento mais tarde, pago com saldo). */
 const RESERVATION = {
   stepMin: 30,            // intervalo entre horas disponíveis
   minLeadMin: 30,         // antecedência mínima para reservar (só afeta "hoje")
   cancelBeforeMin: 30,    // até quanto tempo antes se pode cancelar com reembolso
   todayUntil: '18:00',    // no dia atual, a última hora de levantamento é 18:00
+  slotCapacity: 10,       // máximo de reservas por hora de levantamento (o servidor recusa as seguintes)
 };
 
 const CATEGORIES = ['Todos', 'Tostas & Snacks', 'Pastelaria', 'Bebidas'];
@@ -27,10 +35,12 @@ const PERIODS    = ['Todos', 'Destaques', 'Almoço', 'Jantar', 'Bar'];
 /* Pratos.
    - image:    caminho da foto, relativo à raiz do projeto (pasta images/).
                Se o ficheiro não existir, aparece um ícone neutro no lugar.
+   - tag:      etiqueta na foto (opcional). "Mais pedido" não se escreve aqui: vem dos pedidos reais
+               (servidor) e aparece nos produtos mais pedidos dos últimos dias.
    - tagStyle: 'green' para a etiqueta verde (omitir = etiqueta dourada).
    - meta:     texto no canto da imagem (tempo, volume...). Opcional.
    - badges:   [{ text, style }] — style: 'veg' (verde), 'warn' (amarelo) ou omitido.
-   - periods:  em que filtros de "Período" o prato aparece. */
+   - periods:  em que filtros de "Período" o prato aparece ("Destaques" = os mais pedidos, calculado). */
 const ITEMS = [
   {
     id: 1,
@@ -43,10 +53,9 @@ const ITEMS = [
     description: 'Pão alentejano tostado, queijo flamengo derretido e fiambre da perna.',
     price: 2.20,
     priceLabel: 'Bar Estudante',
-    tag: 'Mais pedido',
     meta: '~4 min',
     badges: [{ text: 'Pão Alentejano' }, { text: 'Favorito' }],
-    periods: ['Destaques', 'Almoço', 'Bar'],
+    periods: ['Almoço', 'Bar'],
   },
   {
     id: 2,
@@ -62,7 +71,7 @@ const ITEMS = [
     tag: 'Fornada recente',
     tagStyle: 'green',
     badges: [{ text: 'Folhado' }, { text: 'Na hora' }],
-    periods: ['Destaques', 'Bar'],
+    periods: ['Bar'],
   },
   {
     id: 3,
@@ -94,7 +103,7 @@ const ITEMS = [
     tagStyle: 'green',
     meta: '300 ml',
     badges: [{ text: 'Natural', style: 'veg' }, { text: 'Sem açúcar adicionado' }],
-    periods: ['Destaques', 'Almoço', 'Jantar', 'Bar'],
+    periods: ['Almoço', 'Jantar', 'Bar'],
   },
   {
     id: 5,
@@ -124,9 +133,36 @@ const ITEMS = [
     priceLabel: 'Preço Combo',
     tag: 'Combo económico',
     badges: [{ text: 'Delta Cafés' }, { text: 'Canela & Açúcar', style: 'warn' }],
-    periods: ['Destaques', 'Almoço'],
+    periods: ['Almoço'],
+  },
+  {
+    id: 7,
+    complexity: 1,
+    prepMin: 1,
+    image: '',                 // ícone neutro; a foto não é precisa para um espresso
+    category: 'Bebidas',
+    subtitle: 'Café',
+    name: 'Café Espresso',
+    description: 'Espresso Delta de lote superior. Podes oferecer um a um colega na aba Mais.',
+    price: 0.80,
+    priceLabel: 'Preço Bar',
+    meta: '~1 min',
+    badges: [{ text: 'Delta Cafés' }],
+    periods: ['Almoço', 'Jantar', 'Bar'],
   },
 ];
+
+/* Preferências alimentares de cada produto: alimentam os interruptores do ecrã "Mais". */
+const DIETARY = {
+  1: [],                                               // tosta com fiambre
+  2: [],                                               // croissant com fiambre
+  3: ['vegetarian'],                                   // donut
+  4: ['vegetarian', 'glutenFree', 'lactoseFree'],       // sumo de laranja
+  5: ['vegetarian', 'glutenFree', 'lactoseFree'],       // água com aroma
+  6: ['vegetarian'],                                   // café + pastel de nata
+  7: ['vegetarian', 'glutenFree', 'lactoseFree'],       // espresso
+};
+ITEMS.forEach((item) => { item.dietary = DIETARY[item.id] || []; });
 
 const TOPUP_AMOUNTS = [5, 10, 20, 50];
 

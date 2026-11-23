@@ -1,7 +1,7 @@
-/* Terminal do bar: sem login, protegido pela chave partilhada (X-Terminal-Key). */
+/* Terminal do bar: exige a sessão de uma funcionária (papel "staff"). */
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, stopServer, resetData, call, login, terminal } = require('./helpers');
+const { startServer, stopServer, resetData, call, login, terminal, staff } = require('./helpers');
 
 before(startServer);
 after(stopServer);
@@ -12,20 +12,59 @@ const placeNow = async (token, items = { 1: 2 }) =>
 
 /* ---------- Proteção ---------- */
 
-test('sem chave do terminal → 401', async () => {
-  const r = await call('/api/terminal/state');
-  assert.deepEqual([r.status, r.body.reason], [401, 'terminal_key']);
+const TERMINAL_ROUTES = [
+  ['/state', undefined],
+  ['/orders/101/status', { status: 'ready' }],
+  ['/orders/101/notify', {}],
+  ['/orders/101/cancel', {}],
+  ['/stock/1', { delta: 5 }],
+  ['/paused', { paused: true }],
+];
+
+test('sem sessão → 401 em todas as rotas do terminal', async () => {
+  for (const [path, body] of TERMINAL_ROUTES) {
+    const r = await terminal(path, { token: null, body });
+    assert.deepEqual([path, r.status, r.body.reason], [path, 401, 'unauthenticated']);
+  }
 });
 
-test('chave errada → 401, também nas ações de escrita', async () => {
-  const bad = { headers: { 'X-Terminal-Key': 'errada' } };
-  assert.equal((await terminal('/state', bad)).status, 401);
-  assert.equal((await terminal('/paused', { ...bad, body: { paused: true } })).status, 401);
+test('token inválido ou só do 1.º passo (password) → 401', async () => {
+  const s1 = await call('/api/auth/login', { body: { email: 'bar@demo.pt', password: 'demo1234' } });
+  assert.equal((await terminal('/state', { token: 'lixo' })).status, 401);
+  assert.equal((await terminal('/state', { token: s1.body.preToken })).status, 401);
 });
 
-test('o token de um aluno não abre o terminal', async () => {
-  const r = await call('/api/terminal/state', { token: await login() });
-  assert.equal(r.status, 401);
+test('um aluno ou docente com sessão não consegue usar nenhuma rota do terminal', async () => {
+  for (const token of [await login(), await login('ana@demo.pt', 'demo1234', '4321')]) {
+    await placeNow(token);
+    for (const [path, body] of TERMINAL_ROUTES) {
+      const r = await terminal(path, { token, body });
+      assert.deepEqual([path, r.status, r.body.reason], [path, 403, 'forbidden']);
+    }
+  }
+  const s = await terminal('/state');
+  assert.deepEqual([s.body.paused, s.body.stock[1], s.body.orders.every((o) => o.status === 'received')], [false, 6, true]);   // 2 pedidos de 2 tostas; nada mudou
+});
+
+test('a sessão de uma funcionária não serve para as rotas da app dos alunos (só /auth/me)', async () => {
+  const token = await staff();
+  for (const [path, body] of [
+    ['/api/state', undefined], ['/api/menu', undefined], ['/api/slots', undefined], ['/api/orders/mine', undefined],
+    ['/api/orders', { type: 'now', items: { 1: 1 } }], ['/api/wallet/topup', { amount: 50 }],
+    ['/api/push/subscribe', { subscription: { endpoint: 'https://push.example/x', keys: { p256dh: 'a', auth: 'b' } } }],
+  ]) {
+    const r = await call(path, { token, body });
+    assert.deepEqual([path, r.status, r.body.reason], [path, 403, 'forbidden']);
+  }
+  assert.equal((await call('/api/auth/me', { token })).body.user.role, 'staff');
+  assert.equal((await terminal('/state')).body.stock[1], 10);              // nada foi pedido
+});
+
+test('a funcionária entra com o mesmo login em 2 passos e o papel "staff"', async () => {
+  const token = await login('bar@demo.pt', 'demo1234', '9999');
+  const me = await call('/api/auth/me', { token });
+  assert.equal(me.body.user.role, 'staff');
+  assert.equal((await terminal('/state', { token })).status, 200);
 });
 
 /* ---------- Estado ---------- */
@@ -65,9 +104,9 @@ test('o histórico mostra o nome atual do utilizador, não a cópia guardada no 
 
 test('avançar o estado: sem estado explícito segue para o seguinte', async () => {
   const o = await placeNow(await login());
-  const r = await terminal(`/orders/${o.number}/status`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/status`, { body: {} });
   assert.equal(r.body.order.status, 'preparing');
-  const r2 = await terminal(`/orders/${o.number}/status`, { body: { status: 'ready' } });
+  const r2 = await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
   assert.equal(r2.body.order.status, 'ready');
   assert.ok(r2.body.order.readyAt);
 });
@@ -75,24 +114,25 @@ test('avançar o estado: sem estado explícito segue para o seguinte', async () 
 test('o aluno vê o pedido como pronto depois de o terminal o avançar', async () => {
   const token = await login();
   const o = await placeNow(token);
-  await terminal(`/orders/${o.number}/status`, { body: { status: 'ready' } });
+  await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
   const s = await call('/api/state', { token });
   assert.equal(s.body.orders[0].status, 'ready');
 });
 
 test('chamar outra vez atualiza notifiedAt', async () => {
   const o = await placeNow(await login());
-  const r = await terminal(`/orders/${o.number}/notify`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
   assert.ok(r.body.order.notifiedAt > 0);
 });
 
 test('cancelar no terminal: reembolsa, repõe stock, regista Transaction e cancelledBy = staff', async () => {
   const token = await login();
   const o = await placeNow(token);
-  await terminal(`/orders/${o.number}/status`, { body: { status: 'preparing' } });   // o bar pode anular em qualquer estado
-  const r = await terminal(`/orders/${o.number}/cancel`, { body: {} });
+  await terminal(`/orders/${o._id}/status`, { body: { status: 'preparing' } });   // o bar pode anular em qualquer estado
+  const r = await terminal(`/orders/${o._id}/cancel`, { body: {} });
   assert.equal(r.body.ok, true);
-  assert.deepEqual([r.body.order.status, r.body.order.cancelledBy], ['cancelled', 'staff']);
+  assert.deepEqual([r.body.order.status, r.body.order.cancelledBy, r.body.order.cancelledByName], ['cancelled', 'staff', 'Rosa Ferreira']);
+  assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['preparing', 'Rosa Ferreira'], ['cancelled', 'Rosa Ferreira']]);
   const s = await call('/api/state', { token });
   assert.deepEqual([s.body.wallet.balance, s.body.stock[1]], [12.5, 10]);
   assert.deepEqual(s.body.wallet.transactions.map((t) => t.kind), ['refund', 'order']);
@@ -101,8 +141,8 @@ test('cancelar no terminal: reembolsa, repõe stock, regista Transaction e cance
 test('cancelar duas vezes o mesmo pedido não reembolsa duas vezes', async () => {
   const token = await login();
   const o = await placeNow(token);
-  await terminal(`/orders/${o.number}/cancel`, { body: {} });
-  const again = await terminal(`/orders/${o.number}/cancel`, { body: {} });
+  await terminal(`/orders/${o._id}/cancel`, { body: {} });
+  const again = await terminal(`/orders/${o._id}/cancel`, { body: {} });
   assert.equal(again.status, 404);
   assert.equal((await call('/api/state', { token })).body.wallet.balance, 12.5);
 });
@@ -153,9 +193,66 @@ test('/api/users e /api/users/:id/orders foram removidos', async () => {
   assert.equal((await call('/api/users/x/orders', { token })).status, 404);
 });
 
-test('não existe papel "staff" nos utilizadores', async () => {
-  const { User } = require('../src/models');
-  await assert.rejects(User.create({ name: 'X', role: 'staff', email: 'x@demo.pt', passwordHash: 'a', pinHash: 'b' }), /staff/);
+test('cada ação do terminal fica registada com o nome da funcionária', async () => {
+  const o = await placeNow(await login());
+  await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.deepEqual(r.body.order.actions.map((a) => [a.action, a.by]), [['ready', 'Rosa Ferreira'], ['notified', 'Rosa Ferreira']]);
+});
+
+/* ---------- Concorrência e registo de ações ---------- */
+
+test('mudar o estado de um pedido que mudou entretanto (ex.: cancelado e reembolsado) → 409, sem o desfazer', async () => {
+  const { Order } = require('../src/models');
+  const o = await placeNow(await login(), { 1: 1 });
+  const original = Order.findOneAndUpdate;
+  Order.findOneAndUpdate = function (filter, ...rest) {                 // outra funcionária avançou-o mesmo antes
+    Order.findOneAndUpdate = original;
+    return Order.updateOne({ _id: o._id }, { status: 'preparing' }).then(() => original.call(this, filter, ...rest));
+  };
+  const r = await terminal(`/orders/${o._id}/status`, { body: { status: 'ready' } });
+  assert.deepEqual([r.status, r.body.reason], [409, 'conflict']);
+  assert.equal((await Order.findById(o._id)).status, 'preparing');
+});
+
+test('chamar a senha de um pedido cancelado não muda nada (404)', async () => {
+  const { Order } = require('../src/models');
+  const o = await placeNow(await login(), { 1: 1 });
+  await terminal(`/orders/${o._id}/cancel`, { body: {} });
+  const r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.equal(r.status, 404);
+  const saved = await Order.findById(o._id);
+  assert.deepEqual([saved.notifiedAt, saved.actions.map((a) => a.action)], [0, ['cancelled']]);
+});
+
+test('o registo de ações guarda só as últimas 50', async () => {
+  const o = await placeNow(await login(), { 1: 1 });
+  let r;
+  for (let i = 0; i < 55; i++) r = await terminal(`/orders/${o._id}/notify`, { body: {} });
+  assert.equal(r.body.order.actions.length, 50);
+});
+
+/* ---------- Senha do dia ---------- */
+
+test('pedidos de dias diferentes com a mesma senha não se confundem (as rotas usam o id único)', async () => {
+  const { Setting } = require('../src/models');
+  const token = await login();
+  const ontem = await placeNow(token, { 1: 1 });
+  await Setting.updateOne({ _id: 'bar' }, { ticketDay: '2000-01-01' });       // o dia mudou
+  const hoje = await placeNow(token, { 2: 1 });
+  assert.deepEqual([ontem.ticket, hoje.ticket], [1, 1]);
+  assert.notEqual(ontem._id, hoje._id);
+
+  await terminal(`/orders/${hoje._id}/status`, { body: { status: 'preparing' } });
+  await terminal(`/orders/${ontem._id}/cancel`, { body: {} });
+  const s = await terminal('/state');
+  const byId = Object.fromEntries(s.body.orders.map((o) => [o._id, o.status]));
+  assert.deepEqual([byId[ontem._id], byId[hoje._id]], ['cancelled', 'preparing']);
+});
+
+test('um id de pedido inválido ou inexistente → 404', async () => {
+  assert.equal((await terminal('/orders/101/status', { body: {} })).status, 404);
+  assert.equal((await terminal('/orders/64b000000000000000000000/cancel', { body: {} })).status, 404);
 });
 
 /* ---------- Web Push ---------- */
@@ -177,15 +274,15 @@ test('quando o pedido fica pronto o servidor envia Web Push ao aluno', async () 
   };
 
   try {
-    await terminal(`/orders/${order.number}/status`, { body: { status: 'preparing' } });
-    await terminal(`/orders/${order.number}/status`, { body: { status: 'ready' } });
+    await terminal(`/orders/${order._id}/status`, { body: { status: 'preparing' } });
+    await terminal(`/orders/${order._id}/status`, { body: { status: 'ready' } });
     for (let i = 0; i < 40 && !sent.length; i++) await new Promise((r) => setTimeout(r, 25));
   } finally {
     webpush.sendNotification = original;
   }
 
   assert.equal(sent.length, 1);
-  assert.match(sent[0].payload.title, new RegExp(`#${order.number}`));
+  assert.equal(sent[0].payload.title, `Pedido #${order.ticket} pronto!`);   // a senha do dia, não o número interno
   assert.equal(sent[0].subscription.endpoint, 'https://push.example/sub/ready');
 });
 
@@ -206,8 +303,8 @@ test('chamar a senha e anular também enviam Web Push', async () => {
   };
 
   try {
-    await terminal(`/orders/${order.number}/notify`, { body: {} });
-    await terminal(`/orders/${order.number}/cancel`, { body: {} });
+    await terminal(`/orders/${order._id}/notify`, { body: {} });
+    await terminal(`/orders/${order._id}/cancel`, { body: {} });
     for (let i = 0; i < 40 && sent.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
   } finally {
     webpush.sendNotification = original;

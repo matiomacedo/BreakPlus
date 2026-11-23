@@ -68,10 +68,15 @@ const emptyHTML = (title, text) => `
 
 const roleBadge = (o) => (o.role && o.role !== 'Estudante' ? `<span class="role">${escapeHtml(o.role)}</span>` : '');
 
-const linesHTML = (items) => Object.entries(items).map(([id, qty]) => {
+const linesHTML = (items, free = false) => Object.entries(items).map(([id, qty]) => {
   const item = findItem(id);
-  return `<li><span>${qty}× ${escapeHtml(item.name)}</span><b>${eur(qty * item.price)}</b></li>`;
+  return `<li><span>${qty}× ${escapeHtml(item.name)}</span><b>${free ? '0,00€' : eur(qty * item.price)}</b></li>`;
 }).join('');
+
+/** Café pago por outra pessoa: identifica quem ofereceu e que não há cobrança no balcão. */
+const giftPill = (o) => o.giftCode
+  ? `<span class="pill gift" title="Café pago por ${escapeHtml(o.giftFromName || 'um colega')}">${icon('gift', 'sm')}<span>Oferta${o.giftFromName ? ` · ${escapeHtml(o.giftFromName)}` : ''}</span></span>`
+  : '';
 
 /* ==========================================================================
    Fila com prioridade justa (shared/queue.js)
@@ -150,7 +155,7 @@ function renderTopbar() {
 /** Botão principal do cartão, conforme o estado em que o pedido está. */
 function mainButtonHTML(o) {
   if (o.status === 'received') return `<button class="btn primary big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('flame')}Iniciar preparação</button>`;
-  if (o.status === 'preparing') return `<button class="btn ready big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('megaphone')}Marcar pronto (chamar #${escapeHtml(o.number)})</button>`;
+  if (o.status === 'preparing') return `<button class="btn ready big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('megaphone')}Marcar pronto (chamar #${escapeHtml(o.ticket)})</button>`;
   return `<button class="btn deliver big" data-act="advance" data-number="${escapeHtml(o.number)}">${icon('check-circle')}Entregar pedido</button>`;
 }
 
@@ -170,10 +175,12 @@ function orderCardHTML(o, rank = null) {
   const isNew = !ui.first && !ui.known.has(o.number);
   const changedStatus = ui.lastStatus[o.number] && ui.lastStatus[o.number] !== o.status;
   const reservation = o.type === 'reservation';
-  const origin = reservation
-    ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
-    : 'Enviado da App Campus · Saldo pago';
-  const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '● ' : ''}${STEP_LABEL[s]}</span>`).join('');
+  const origin = o.giftCode
+    ? `${icon('gift', 'sm')}Café oferecido por ${escapeHtml(o.giftFromName || 'um colega')} · sem custo`
+    : reservation
+      ? `${icon('calendar', 'sm')}Reserva · levantamento às ${escapeHtml(o.pickupTime)}`
+      : 'Enviado da App Campus · Saldo pago';
+  const labels = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}">${i === step ? '<i class="step-dot"></i>' : ''}${STEP_LABEL[s]}</span>`).join('');
   const priority = rank && rank.position
     ? `<span class="pill prio" title="${escapeHtml(rank.reasoning)}">${icon('zap', 'sm')}<span>${rank.position}.º a preparar</span></span>`
     : '';
@@ -185,7 +192,7 @@ function orderCardHTML(o, rank = null) {
   <article class="order s-${escapeHtml(o.status)} ${isNew ? 'rise' : ''} ${changedStatus ? 'flash' : ''}" data-number="${escapeHtml(o.number)}">
     <header class="order-head">
       <div class="who">
-        <span class="num">#${escapeHtml(o.number)}</span>
+        <span class="num">#${escapeHtml(o.ticket)}</span>
         <div>
           <div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div>
           <div class="origin">${origin}</div>
@@ -193,6 +200,7 @@ function orderCardHTML(o, rank = null) {
         </div>
       </div>
       <div class="pills">
+        ${giftPill(o)}
         ${priority}
         ${o.status === 'ready'
           ? `<span class="pill ok" data-since="${escapeHtml(o.readyAt)}" data-late="0">${icon('check', 'sm')}<span>${sinceText(o.readyAt)}</span></span>`
@@ -201,7 +209,7 @@ function orderCardHTML(o, rank = null) {
       </div>
     </header>
 
-    <ul class="lines">${linesHTML(o.items)}</ul>
+    <ul class="lines">${linesHTML(o.items, !!o.giftCode)}</ul>
 
     <div class="controls">
       <div class="speed" style="--p:${step / 2}">
@@ -209,7 +217,7 @@ function orderCardHTML(o, rank = null) {
         <div class="speed-bar">
           <div class="speed-track"><div class="speed-fill"></div></div>
           <input class="speed-input" type="range" min="0" max="2" step="1" value="${step}"
-                 data-number="${escapeHtml(o.number)}" aria-label="Estado do pedido #${escapeHtml(o.number)}">
+                 data-number="${escapeHtml(o.number)}" aria-label="Estado do pedido #${escapeHtml(o.ticket)}">
         </div>
         <small>${SPEED_HINT[o.status]}</small>
       </div>
@@ -225,11 +233,12 @@ function historyItemHTML(o) {
   return `
     <div class="hist ${cancelled ? 'is-cancelled' : ''}">
       <div class="hist-top">
-        <span class="hnum">#${escapeHtml(o.number)}</span>
+        <span class="hnum">#${escapeHtml(o.ticket)}</span>
         <div class="hist-who"><b>${escapeHtml(o.customer)}</b><small>${cancelled ? 'Anulado' : 'Entregue'} ${when}</small></div>
         <b class="price">${eur(o.total)}</b>
       </div>
       <div class="hist-items">${escapeHtml(itemsSummary(o.items))}</div>
+      ${giftPill(o)}
       ${cancelled
         ? `<span class="pill">${o.mine ? 'Reembolsado na app' : 'Anulado'}</span>`
         : `<button class="btn soft-danger" data-act="undo" data-number="${escapeHtml(o.number)}">${icon('undo')}Anular pedido (reembolso + stock)</button>`}
@@ -303,7 +312,7 @@ function reservationCardHTML(o) {
     </div>
     <div class="resv-body">
       <div class="resv-top">
-        <span class="hnum">#${escapeHtml(o.number)}</span>
+        <span class="hnum">#${escapeHtml(o.ticket)}</span>
         <div><div class="name">${escapeHtml(o.customer)}${roleBadge(o)}</div><div class="origin">Reservado na App Campus · Saldo pago</div></div>
         ${status}
       </div>
@@ -408,7 +417,6 @@ function showTab(name) {
 
 /** Mostra/esconde o aviso de ligação (chamado pela store a cada atualização). */
 const CONN_TEXT = {
-  terminal_key: 'Chave do terminal em falta ou errada. Confirma terminalKey em terminal/config.js (igual a TERMINAL_KEY em server/.env).',
   network: 'Sem ligação ao servidor. A tentar outra vez…',
 };
 function showConnection(ok, reason) {
@@ -450,8 +458,8 @@ function announceArrivals() {
   if (ui.first) return;
   Store.get().orders.forEach((o) => {
     if (ui.known.has(o.number)) return;
-    if (o.status === 'received') toast(`Novo pedido #${o.number}`, `${o.customer} · ${itemsSummary(o.items)}`);
-    else if (o.status === 'reserved') toast(`Nova reserva #${o.number}`, `${o.customer} · ${pickupText(o)}`);
+    if (o.status === 'received') toast(`Novo pedido #${o.ticket}`, `${o.customer} · ${itemsSummary(o.items)}`);
+    else if (o.status === 'reserved') toast(`Nova reserva #${o.ticket}`, `${o.customer} · ${pickupText(o)}`);
   });
 }
 

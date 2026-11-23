@@ -7,14 +7,17 @@
    carrinho e preferências.
    ========================================================================== */
 
-/* Preferências guardadas no dispositivo: mantêm-se depois de recarregar. */
-const PREFS_KEY = 'bp_prefs_student';
+/* Preferências guardadas no dispositivo: mantêm-se depois de recarregar.
+   A chave inclui o id da conta para trocar de aluno no mesmo telemóvel não
+   herdar as escolhas do anterior. */
+const PREFS_BASE = 'bp_prefs_student';
+let prefsKey = PREFS_BASE;
 const DEFAULT_PREFS = { vegetarian: false, glutenFree: false, lactoseFree: false, notifications: true };
 
 function loadPrefs() {
   const prefs = { ...DEFAULT_PREFS };
   try {
-    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    const saved = JSON.parse(localStorage.getItem(prefsKey) || '{}');
     for (const key of Object.keys(DEFAULT_PREFS)) {
       if (typeof saved[key] === 'boolean') prefs[key] = saved[key];
     }
@@ -23,7 +26,14 @@ function loadPrefs() {
 }
 
 function persistPrefs() {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify(state.prefs)); } catch { /* sem armazenamento */ }
+  try { localStorage.setItem(prefsKey, JSON.stringify(state.prefs)); } catch { /* sem armazenamento */ }
+}
+
+/** Chamado ao entrar: carrega as preferências da conta certa. */
+function setPrefsUser(user) {
+  const id = user && (user.id || user.email || user.name);
+  prefsKey = id ? `${PREFS_BASE}_${encodeURIComponent(String(id))}` : PREFS_BASE;
+  state.prefs = loadPrefs();
 }
 
 const state = {
@@ -41,6 +51,9 @@ const state = {
 
   topupAmount: 10,
 
+  // Rascunho da oferta de café (email → contacto confirmado → mensagem)
+  gift: { email: '', message: '', contact: null },
+
   // Preferências (ecrã "Mais"), persistidas em localStorage
   prefs: loadPrefs(),
 };
@@ -54,13 +67,28 @@ const db = () => Store.get();
 const balance = () => db().wallet.balance;
 const stockOf = (id) => db().stock[id] ?? 0;
 const isPaused = () => db().paused;
+/** "Mais pedido": calculado no servidor a partir dos pedidos reais (vazio sem pedidos suficientes). */
+const isPopular = (id) => (db().popular || []).includes(id);
+
+/* ---------- Cafés oferecidos (issue #11) ---------- */
+
+const receivedGifts = () => (db().gifts?.received || []).filter((g) => g.status === 'pending');
+const sentGifts = () => db().gifts?.sent || [];
+/** Preço do café oferecido: o servidor envia o preço real da base de dados. */
+const giftPrice = () => db().giftPrice ?? findItem(GIFT.itemId)?.price ?? 0.8;
+const giftStatusText = (g) => ({ pending: 'Por levantar', claimed: 'Levantado', refunded: 'Reembolsado' }[g.status] || g.status);
 
 /* ---------- Menu e carrinho ---------- */
 
 function visibleItems() {
+  /* As preferências alimentares da app "Mais" filtram realmente o menu. */
+  const needs = Object.entries(state.prefs)
+    .filter(([key, on]) => on && ['vegetarian', 'glutenFree', 'lactoseFree'].includes(key))
+    .map(([key]) => key);
   return ITEMS.filter((item) =>
     (state.category === 'Todos' || item.category === state.category) &&
-    (state.period === 'Todos' || item.periods.includes(state.period))
+    (state.period === 'Todos' || (state.period === 'Destaques' ? isPopular(item.id) : item.periods.includes(state.period))) &&
+    needs.every((need) => (item.dietary || []).includes(need))
   );
 }
 
@@ -107,10 +135,10 @@ const STATUS_TEXT = {
 
 /* ---------- Horários das reservas ---------- */
 
-/** Demonstração: alguns horários aparecem "esgotados" (em produção viria do servidor). */
+/** Hora esgotada: já tem RESERVATION.slotCapacity reservas (dados do servidor, GET /api/state → slots). */
 function isSlotFull(key, time) {
-  const hash = [...(key + time)].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 7);
-  return hash % 6 === 0;
+  const slots = db().slots;
+  return !!slots && slots.key === key && slots.full.includes(time);
 }
 
 /** Horários de um dia: [{ time: '12:30', full: false }, ...] */

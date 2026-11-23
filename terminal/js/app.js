@@ -6,6 +6,8 @@
    ========================================================================== */
 
 const orderOf = (number) => Store.get().orders.find((o) => o.number === +number);
+const writeFailed = (r) => !r || r.ok === false;
+const writeError = () => toast('Não foi possível gravar', 'O servidor não respondeu. Tenta outra vez.');
 
 const ACTIONS = {
 
@@ -16,40 +18,42 @@ const ACTIONS = {
   /* --- Fila de pedidos --- */
 
   // Avança para o passo seguinte: recebido → a preparar → pronto → entregue
-  'advance': (d, el) => {
+  'advance': guarded((d) => 'advance:' + d.number, async (d, el) => {
     const o = orderOf(d.number);
     if (!o) return;
-    if (o.status === 'received')  return void Store.setStatus(o.number, 'preparing');
-    if (o.status === 'preparing') {
-      Store.setStatus(o.number, 'ready');
-      return toast(`Pedido #${o.number} pronto`, `${o.customer} foi avisado na app. Chamada ativa no balcão.`);
+    if (o.status === 'received' || o.status === 'preparing') {
+      const next = o.status === 'received' ? 'preparing' : 'ready';
+      if (writeFailed(await Store.setStatus(o._id, next))) return writeError();
+      if (next === 'ready') toast(`Pedido #${o.ticket} pronto`, `${o.customer} foi avisado na app. Chamada ativa no balcão.`);
+      return;
     }
     // entregue: o cartão desvanece-se e depois sai da fila
     const card = el.closest('.order');
     if (card) card.classList.add('leaving');
-    setTimeout(() => {
-      Store.setStatus(o.number, 'done');
-      toast(`Pedido #${o.number} entregue`, 'Passou para o histórico recente.');
-    }, card ? 280 : 0);
-  },
+    await new Promise((resolve) => setTimeout(resolve, card ? 280 : 0));
+    if (writeFailed(await Store.setStatus(o._id, 'done'))) return writeError();
+    toast(`Pedido #${o.ticket} entregue`, 'Passou para o histórico recente.');
+  }),
 
-  'notify': (d) => {
-    Store.notify(+d.number);
-    toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${orderOf(d.number).customer}.`);
-  },
+  'notify': guarded((d) => 'notify:' + d.number, async (d) => {
+    const o = orderOf(d.number);
+    if (!o) return;
+    if (writeFailed(await Store.notify(o._id))) return writeError();
+    toast('Senha chamada outra vez', `Aviso reenviado ao ecrã e à app de ${o.customer}.`);
+  }),
 
   // Cancelar um pedido da fila ou uma reserva (devolve o saldo e repõe o stock)
   'cancel': (d) => {
     const o = orderOf(d.number);
     if (!o) return;
     openConfirm({
-      title: `Cancelar ${o.type === 'reservation' ? 'reserva' : 'pedido'} #${o.number}?`,
+      title: `Cancelar ${o.type === 'reservation' ? 'reserva' : 'pedido'} #${o.ticket}?`,
       text: `Devolve ${eur(o.total)} a ${o.customer} e repõe o stock.`,
       okLabel: 'Cancelar e reembolsar',
-      onOk: () => {
-        Store.cancelOrder(o.number);
-        toast(`#${o.number} cancelado`, `${eur(o.total)} devolvidos a ${o.customer}.`);
-      },
+      onOk: guarded(() => 'cancel:' + o.number, async () => {
+        if (writeFailed(await Store.cancelOrder(o._id))) return writeError();
+        toast(`#${o.ticket} cancelado`, `${eur(o.total)} devolvidos a ${o.customer}.`);
+      }),
     });
   },
 
@@ -58,38 +62,44 @@ const ACTIONS = {
     const o = orderOf(d.number);
     if (!o) return;
     openConfirm({
-      title: `Anular pedido #${o.number}?`,
+      title: `Anular pedido #${o.ticket}?`,
       text: `Devolve ${eur(o.total)} a ${o.customer} e repõe os produtos no stock.`,
       okLabel: 'Anular pedido',
-      onOk: () => {
-        Store.cancelOrder(o.number);
-        toast(`Pedido #${o.number} anulado`, `${eur(o.total)} devolvidos · stock reposto.`);
-      },
+      onOk: guarded(() => 'cancel:' + o.number, async () => {
+        if (writeFailed(await Store.cancelOrder(o._id))) return writeError();
+        toast(`Pedido #${o.ticket} anulado`, `${eur(o.total)} devolvidos · stock reposto.`);
+      }),
     });
   },
 
   /* --- Reservas --- */
-  'start-reservation': (d) => {
+  'start-reservation': guarded((d) => 'reservation:' + d.number, async (d) => {
     const o = orderOf(d.number);
-    Store.setStatus(+d.number, 'preparing');
-    toast(`Reserva #${d.number} na fila`, `${o.customer} foi avisado de que a preparação começou.`);
-  },
+    if (!o) return;
+    if (writeFailed(await Store.setStatus(o._id, 'preparing'))) return writeError();
+    toast(`Reserva #${o.ticket} na fila`, `${o.customer} foi avisado de que a preparação começou.`);
+  }),
 
   /* --- Stock --- */
-  'stock-adjust': (d) => Store.adjustStock(+d.id, +d.delta),
-  'stock-toggle': (d) => {
+  'stock-adjust': guarded((d) => 'stock:' + d.id, async (d) => {
+    if (writeFailed(await Store.adjustStock(+d.id, +d.delta))) writeError();
+  }),
+  'stock-toggle': guarded((d) => 'stock:' + d.id, async (d) => {
     const qty = Store.get().stock[d.id] ?? 0;
-    const name = findItem(d.id).name;
-    if (qty > 0) { Store.setStock(+d.id, 0); toast('Produto esgotado', `${name} já não aparece como disponível na app.`); }
-    else         { Store.setStock(+d.id, 10); toast('Produto reativado (+10)', `${name} está outra vez disponível na app.`); }
-  },
+    const name = findItem(d.id)?.name || 'Produto';
+    const out = qty > 0;
+    if (writeFailed(await Store.setStock(+d.id, out ? 0 : 10))) return writeError();
+    toast(out ? 'Produto esgotado' : 'Produto reativado (+10)',
+      out ? `${name} já não aparece como disponível na app.` : `${name} está outra vez disponível na app.`);
+  }),
 
   /* --- Terminal --- */
-  'pause': () => {
+  'pause': guarded(() => 'pause', async () => {
     const paused = !Store.get().paused;
-    Store.setPaused(paused);
+    if (writeFailed(await Store.setPaused(paused))) return writeError();
     toast(paused ? 'Pedidos na hora em pausa' : 'Balcão aberto', paused ? 'Os alunos só podem reservar até retomares.' : 'Os pedidos na hora voltaram a entrar.');
-  },
+  }),
+  'logout': () => Auth.logout(),
   'fullscreen': () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
@@ -105,7 +115,7 @@ document.addEventListener('click', (event) => {
   const el = event.target.closest('[data-act]');
   if (el && !el.disabled) {
     const action = ACTIONS[el.dataset.act];
-    if (action) action(el.dataset, el);
+    if (action) Promise.resolve(action(el.dataset, el)).catch(() => writeError());
     return;
   }
   if (event.target.id === 'modal') closeConfirm();    // clicar no fundo
@@ -127,7 +137,7 @@ document.addEventListener('input', (event) => {
   speed.style.setProperty('--p', input.value / 2);
   speed.querySelectorAll('.speed-labels span').forEach((label, i) => {
     label.classList.toggle('on', i === +input.value);
-    label.textContent = (i === +input.value ? '● ' : '') + STEP_LABEL[STEPS[i]];
+    label.innerHTML = (i === +input.value ? '<i class="step-dot"></i>' : '') + STEP_LABEL[STEPS[i]];
   });
 });
 
@@ -136,7 +146,12 @@ document.addEventListener('change', (event) => {
   const input = event.target.closest('.speed-input');
   if (!input) return;
   ui.dragging = false;
-  Store.setStatus(+input.dataset.number, STEPS[+input.value]);
+  const o = orderOf(input.dataset.number);
+  if (!o) return;                                   // o pedido pode ter saído da lista entretanto
+  const status = STEPS[+input.value];
+  guarded((id) => 'speed:' + id, async (id, s) => {
+    if (writeFailed(await Store.setStatus(id, s))) writeError();
+  })(o._id, status);
 });
 
 document.addEventListener('pointerdown', (event) => { if (event.target.closest('.speed-input')) ui.dragging = true; });
@@ -150,15 +165,29 @@ document.addEventListener('pointercancel', endDrag);
 
 /* ---------- Arranque ---------- */
 
-// Sem login: o terminal abre logo na fila (a chave do terminal vai em cada pedido).
-(async () => {
-  try {
+/* A barra de topo pode ficar mais alta com letra maior ou ecrã mais estreito.
+   Medir a altura impede que a faixa de pausa e o aviso passem por baixo dela. */
+const topbar = document.querySelector('.topbar');
+const syncTopbarHeight = () => {
+  if (!topbar) return;
+  document.documentElement.style.setProperty('--topbar-h', Math.ceil(topbar.getBoundingClientRect().height) + 'px');
+};
+syncTopbarHeight();
+if (topbar && window.ResizeObserver) new ResizeObserver(syncTopbarHeight).observe(topbar);
+else window.addEventListener('resize', syncTopbarHeight);
+
+// Login das funcionárias (papel "staff"); só depois se carrega o estado do bar.
+// O spinner de arranque é mostrado por Auth.start() apenas se a resposta demorar.
+Auth.start({
+  key: 'bp_token_staff',
+  roles: ['staff'],
+  onEnter: async (user) => {
+    document.getElementById('staff-name').textContent = user.name;
     await Store.start();
-  } finally {
-    const overlay = document.getElementById('boot');
-    if (overlay) overlay.hidden = true;
-  }
-  Store.subscribe(render); render(); showTab('orders');
-  // Relógio, "Há N min" e prioridade (a espera muda a ordem sem novos pedidos).
-  setInterval(() => { tickTimes(); renderTopbar(); refreshQueuePriority(); }, 15000);
-})();
+    Store.subscribe(render); render(); showTab('orders');
+    // Relógio, "Há N min" e prioridade (a espera muda a ordem sem novos pedidos).
+    if (!window.bpTerminalClockTimer) {
+      window.bpTerminalClockTimer = setInterval(() => { tickTimes(); renderTopbar(); refreshQueuePriority(); }, 15000);
+    }
+  },
+});

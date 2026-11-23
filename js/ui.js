@@ -105,7 +105,7 @@ function renderTicketBanner() {
   banner.hidden = !order;
   if (order) {
     const copy = TICKET_COPY[order.status];
-    $('#ticket-title').textContent = copy.title(order.number);
+    $('#ticket-title').textContent = copy.title(order.ticket);
     $('#ticket-sub').textContent = copy.sub;
     banner.classList.toggle('ready', order.status === 'ready');
     banner.querySelector('button').dataset.id = order.number;
@@ -124,7 +124,7 @@ function renderReservationBanner() {
     const detail = next.status === 'reserved' ? plural(itemsCount(next.items), 'item', 'itens')
       : next.status === 'ready' ? 'pronta para levantar' : 'a preparar';
     $('#resv-title').textContent = pickupText(next);
-    $('#resv-sub').textContent = `Reserva #${next.number} · ${detail}`;
+    $('#resv-sub').textContent = `Reserva #${next.ticket} · ${detail}`;
     banner.querySelector('button').dataset.id = next.number;
     if (!reservationBannerWasShown && state.view === 'bar') replay(banner, 'pop');
   }
@@ -136,7 +136,9 @@ function renderTray() {
   const count = cartCount();
   $('#tray-count').textContent = plural(count, 'item', 'itens');
   $('#tray-total').textContent = 'Total ' + eur(cartTotal());
-  $('#tray').classList.toggle('show', count > 0 && state.view === 'bar');
+  const show = count > 0 && state.view === 'bar';
+  $('#tray').classList.toggle('show', show);
+  document.body.classList.toggle('has-tray', show);   /* dá espaço extra no fim da página */
   if (count > 0 && count !== lastCartCount) replay($('#tray-count'), 'bump');
   lastCartCount = count;
 }
@@ -158,7 +160,8 @@ function productImageHTML(item, stock) {
     <div class="pic">
       <span class="pic-fallback" aria-hidden="true"><svg class="ic"><use href="#i-utensils"/></svg></span>
       ${img}
-      <span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>
+      ${isPopular(item.id) ? '<span class="tag">Mais pedido</span>'
+        : item.tag ? `<span class="tag ${escapeHtml(item.tagStyle || '')}">${escapeHtml(item.tag)}</span>` : ''}
       ${meta && stock > 0 ? `<span class="meta">${escapeHtml(meta)}</span>` : ''}
       ${stock === 0 ? '<span class="soldout-badge">Esgotado</span>' : ''}
     </div>`;
@@ -226,7 +229,7 @@ function orderRowHTML(o) {
   const when = o.type === 'reservation' ? `Reserva · ${pickupText(o)}` : o.when;
   return `
     <div class="rw ${cancelled ? 'is-cancelled' : ''}">
-      <div><b>#${escapeHtml(o.number)} · ${escapeHtml(when)}</b><small>${escapeHtml(itemsSummary(o.items))}</small></div>
+      <div><b>#${escapeHtml(o.ticket)} · ${escapeHtml(when)}</b><small>${escapeHtml(itemsSummary(o.items))}</small></div>
       <div class="rw-end">
         <b>${eur(o.total)}</b>
         ${cancelled
@@ -244,7 +247,7 @@ function reservationCardHTML(o) {
   return `
     <div class="card resv-card">
       <div class="row">
-        <div><div class="cl">Reserva #${escapeHtml(o.number)}</div><h3>${escapeHtml(pickupText(o))}</h3></div>
+        <div><div class="cl">Reserva #${escapeHtml(o.ticket)}</div><h3>${escapeHtml(pickupText(o))}</h3></div>
         <span class="b v ${isLive(o) ? 'live' : ''}">${STATUS_TEXT[o.status]}</span>
       </div>
       <p class="desc">${escapeHtml(itemsSummary(o.items))}</p>
@@ -262,7 +265,7 @@ function liveOrderCardHTML(o) {
   return `
     <div class="card">
       <div class="row">
-        <div><div class="cl">Em curso</div><h3>Pedido #${escapeHtml(o.number)}</h3></div>
+        <div><div class="cl">Em curso</div><h3>Pedido #${escapeHtml(o.ticket)}</h3></div>
         <span class="b v live">${STATUS_TEXT[o.status]}</span>
       </div>
       <ol class="steps">${steps}</ol>
@@ -284,9 +287,12 @@ function renderOrders() {
       ? `<div class="stack">${reservations.map(reservationCardHTML).join('')}</div>`
       : `<div class="card"><p class="desc desc-flush">Sem reservas. No carrinho, escolhe "Reservar" para levantares mais tarde.</p></div>`}`;
 
-  const history = historyOrders().map(orderRowHTML).join('');
+  const historyOrdersList = historyOrders();
+  const history = historyOrdersList.length
+    ? historyOrdersList.map(orderRowHTML).join('')
+    : '<div class="card empty-inline">Ainda não tens pedidos anteriores. Os teus pedidos aparecem aqui depois de entregues.</div>';
 
-  $('#view-orders .body').innerHTML = current + reservationsHTML + '<div class="cl sec">Anteriores</div>' + history;
+  $('#view-orders .body').innerHTML = current + reservationsHTML + (historyOrdersList.length ? '<div class="cl sec">Anteriores</div>' : '') + history;
 }
 
 /* ==========================================================================
@@ -299,11 +305,14 @@ function renderWallet({ fresh = false } = {}) {
     <button class="chip ${v === state.topupAmount ? 'on' : ''}" data-action="set-topup" data-value="${v}" aria-pressed="${v === state.topupAmount}">${eur(v)}</button>`
   ).join('');
 
-  const movements = db().wallet.transactions.map((t, i) => `
+  const transactions = db().wallet.transactions;
+  const movements = transactions.length
+    ? transactions.map((t, i) => `
     <div class="rw ${fresh && i === 0 ? 'row-new' : ''}">
       <div><b>${escapeHtml(t.label)}</b><small>${escapeHtml(t.when)}</small></div>
       <b class="${t.value > 0 ? 'pos' : ''}">${t.value > 0 ? '+' : '−'}${eur(Math.abs(t.value))}</b>
-    </div>`).join('');
+    </div>`).join('')
+    : '<div class="card empty-inline">Ainda não há movimentos. Carrega saldo para começares a pedir no bar.</div>';
 
   $('#view-wallet .body').innerHTML = `
     <div class="bigbal">
@@ -341,6 +350,81 @@ function switchRowHTML(key, label, hint) {
     </div>`;
 }
 
+/** Cartões da aba Mais: ofertas por levantar (com ação) e ofertas já enviadas. */
+function giftCardsHTML() {
+  const received = receivedGifts();
+  const receivedHTML = received.length ? `
+    <div class="cl sec">Cafés que te ofereceram</div>
+    <div class="stack">${received.map((g) => `
+      <div class="card gift-card">
+        <div class="row">
+          <div>
+            <div class="cl">Recebido · ${escapeHtml(g.when)}</div>
+            <h3>Café oferecido por ${escapeHtml(g.fromName || 'um colega')}</h3>
+            ${g.message ? `<p class="gift-note">“${escapeHtml(g.message)}”</p>` : ''}
+          </div>
+          <span class="b v">Por levantar</span>
+        </div>
+        <button class="cta cta-full cta-spaced" data-action="claim-gift" data-code="${escapeHtml(g.code)}">Levantar café agora</button>
+      </div>`).join('')}</div>` : '';
+
+  const sent = sentGifts();
+  const sentHTML = sent.length ? `
+    <div class="cl sec">Cafés que ofereceste</div>
+    <div class="card">${sent.map((g) => `
+      <div class="mrow">
+        <div><b>Para ${escapeHtml(g.toName || g.toEmail)}</b><small>${escapeHtml(g.when)}${g.message ? ` · “${escapeHtml(g.message)}”` : ''}</small></div>
+        <span class="b ${g.status === 'pending' ? '' : 'v'}">${giftStatusText(g)}</span>
+      </div>`).join('')}</div>` : '';
+
+  return receivedHTML + sentHTML;
+}
+
+/** 1.º passo da oferta: email do colega. */
+function openGiftEmailSheet() {
+  const draft = state.gift;
+  openSheet(`
+    <h2>Oferecer um café</h2>
+    <p class="desc">Pagas ${eur(giftPrice())} do teu saldo. O colega recebe um aviso e levanta o café no bar quando quiser.</p>
+    <label class="gift-label" for="gift-email">Email do colega</label>
+    <input class="gift-field" id="gift-email" type="email" inputmode="email" autocomplete="off"
+           placeholder="nome@ipvc.pt" value="${escapeHtml(draft.email)}">
+    <p class="gift-err" id="gift-err" role="alert"></p>
+    <button class="cta cta-full" data-action="gift-lookup">Ver contacto</button>
+    ${closeButtonHTML('Cancelar', 'ghost cta-spaced')}`);
+  setTimeout(() => document.getElementById('gift-email')?.focus(), 320);
+}
+
+/** 2.º passo: confirmar quem recebe e escrever a mensagem. */
+function openGiftConfirmSheet() {
+  const c = state.gift.contact || {};
+  openSheet(`
+    <h2>Confirmar oferta</h2>
+    <div class="gift-contact">
+      <span class="av" aria-hidden="true">${escapeHtml((c.name || '?')[0])}</span>
+      <div><b>${escapeHtml(c.name || '')}</b><small>${escapeHtml(c.email || '')}${c.role ? ` · ${escapeHtml(c.role)}` : ''}</small></div>
+    </div>
+    <label class="gift-label" for="gift-message">Mensagem (opcional)</label>
+    <textarea class="gift-field" id="gift-message" rows="3" maxlength="${GIFT.maxMessage}"
+              placeholder="Escreve algo simpático…">${escapeHtml(state.gift.message)}</textarea>
+    <p class="gift-err" id="gift-err" role="alert"></p>
+    <p class="gift-price">Total a pagar <b>${eur(giftPrice())}</b></p>
+    <div class="acts">
+      <button class="ghost" data-action="open-gift">Voltar</button>
+      <button class="cta" data-action="gift-send">Pagar e oferecer</button>
+    </div>`, { swap: true });
+}
+
+function openClaimSheet(gift) {
+  openSheet(`
+    <h2>Levantar café oferecido</h2>
+    <p class="desc">${escapeHtml(gift.fromName || 'Um colega')} ofereceu-te este café${gift.message ? ` com a mensagem “${escapeHtml(gift.message)}”` : ''}. Entra na fila do bar com senha, sem custo.</p>
+    <div class="acts">
+      <button class="ghost" data-action="close-sheet">Agora não</button>
+      <button class="cta" data-action="confirm-claim" data-code="${escapeHtml(gift.code)}">Levantar agora</button>
+    </div>`);
+}
+
 function renderMore() {
   const avatar = avatarSrc(ME.avatar);
   $('#view-more .body').innerHTML = `
@@ -350,6 +434,16 @@ function renderMore() {
         : ''}</span>
       <div><b>${escapeHtml(ME.customer)}</b><small>${escapeHtml(ME.role)} · IPVC ESTG</small></div>
     </div>
+
+    <div class="cl sec">Café para um colega</div>
+    <div class="card">
+      <button class="mrow gift-promo" data-action="open-gift">
+        <span class="mrow-ic"><svg class="ic"><use href="#i-gift"/></svg></span>
+        <div><b>Oferecer um café</b><small>Pagas ${eur(giftPrice())} e um colega levanta quando quiser</small></div>
+      </button>
+    </div>
+
+    ${giftCardsHTML()}
 
     <div class="cl sec">Preferências alimentares</div>
     <div class="card">
@@ -369,7 +463,7 @@ function renderMore() {
       </button>
     </div>
 
-    <div class="cl sec">Aplicação</div>
+    ${PWA.canInstall() ? '<div class="cl sec">Aplicação</div>' : ''}
     <div class="card" id="install-card" ${PWA.canInstall() ? '' : 'hidden'}>
       <button class="mrow" data-action="install-pwa">
         <div><b>Instalar no ecrã principal</b><small>Abre em ecrã completo, como uma app</small></div>
@@ -560,6 +654,7 @@ function syncPayButton() {
   }
   btn.textContent = label;
   btn.classList.toggle('disabled', disabled);
+  btn.disabled = disabled;                  // desativado a sério: não dispara a ação
   btn.setAttribute('aria-disabled', disabled);
   $('#cart-total').textContent = eur(total);
 }
@@ -622,7 +717,7 @@ function openTicketSheet(number) {
     ? `Levantamento ${pickupText(order)}`
     : STATUS_TEXT[order.status] + (order.status === 'ready' ? ' · levanta no balcão' : '');
   openSheet(`
-    <h2>${reservation ? `Reserva #${escapeHtml(order.number)}` : `Senha #${escapeHtml(order.number)}`}</h2>
+    <h2>${reservation ? `Reserva #${escapeHtml(order.ticket)}` : `Senha #${escapeHtml(order.ticket)}`}</h2>
     <p class="desc">${escapeHtml(status)}</p>
     <div class="qr"></div>
     ${closeButtonHTML('Fechar', 'cta')}`);
@@ -634,7 +729,7 @@ function openConfirmationSheet(order) {
     <div class="done" aria-hidden="true">
       <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M16 27l7 7 13-14"/></svg>
     </div>
-    <h2 class="center">${reservation ? 'Reserva' : 'Pedido'} #${escapeHtml(order.number)} confirmad${reservation ? 'a' : 'o'}</h2>
+    <h2 class="center">${reservation ? 'Reserva' : 'Pedido'} #${escapeHtml(order.ticket)} confirmad${reservation ? 'a' : 'o'}</h2>
     <p class="desc center">${reservation
       ? `Levanta no balcão ${escapeHtml(pickupText(order))}. Mostra este código.`
       : 'Mostra este código no balcão.'}</p>
@@ -644,7 +739,7 @@ function openConfirmationSheet(order) {
 
 function openCancelSheet(order) {
   openSheet(`
-    <h2>Cancelar reserva #${escapeHtml(order.number)}?</h2>
+    <h2>Cancelar reserva #${escapeHtml(order.ticket)}?</h2>
     <p class="desc">${escapeHtml(pickupText(order))} · ${escapeHtml(itemsSummary(order.items))}</p>
     <p class="desc">Vais receber ${eur(order.total)} de volta no teu saldo.</p>
     <div class="acts">

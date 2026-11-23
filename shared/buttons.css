@@ -1,0 +1,10 @@
+/* Regras de texto partilhadas pelos botões da app e do terminal.
+
+   break-word só parte a palavra quando ela não cabe na linha. Ao contrário
+   de anywhere, não altera o tamanho mínimo de conteúdo dos flex items, pelo
+   que os botões não encolhem abaixo do comprimento das suas palavras. */
+button, .btn, .auth-link {
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+}
