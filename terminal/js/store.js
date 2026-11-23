@@ -7,6 +7,7 @@ const terminalRequest = (path, body) => Auth.api('/api/terminal' + path, body);
 
 const Store = createStore({
   request: terminalRequest,
+  menuPath: '/menu',
   statePath: '/state',
   socketAuth: () => ({ token: Auth.token() }),
   onConnection: (ok, reason) => showConnection(ok, reason),      // em terminal/js/ui.js

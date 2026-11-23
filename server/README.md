@@ -14,6 +14,8 @@ API Express + Mongoose para a app dos alunos (`/api/*`) e para o terminal do bar
    - `npm run create-staff` só acrescenta a conta do terminal (`bar@demo.pt` / `demo1234` / PIN `9999`, ou `-- <email> <nome> <password> <pin>`), sem apagar nada.
 4. Testar: `curl localhost:3000/api/version`. O terminal usa o login de uma conta com o papel `staff` (o seed cria `bar@demo.pt` / `demo1234` / PIN `9999`).
 
+5. Atualizar/Adicionar Produtos: Para atualizar ou adicionar produtos a partir de shared/data.js sem apagar pedidos, utilizadores ou outras coleções, executa npm run products:update na pasta server. O stock dos produtos existentes é preservado; produtos novos começam com stock 20, salvo se shared/data.js definir outro valor.
+
 O servidor recusa arrancar (com a razão na consola) se faltar `MONGODB_URI` ou `JWT_SECRET`, ou se o MongoDB não for um replica set.
 
 ## Porque é que preciso de um replica set?

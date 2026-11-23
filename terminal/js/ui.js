@@ -117,7 +117,7 @@ function renderTopbar() {
   const queueCount = Store.queue().length;
   const reservations = Store.reservations();
   const dueSoon = reservations.some((o) => o.status === 'reserved' && pickupDate(o) - Date.now() <= 20 * 60000);
-  const soldOut = ITEMS.filter((item) => (d.stock[item.id] ?? 0) === 0).length;
+  const soldOut = ITEMS.filter((item) => item.stock === 0).length;
 
   $('#b-orders').textContent = queueCount;
   const resv = $('#b-resv');
@@ -366,12 +366,17 @@ function stockCardHTML(item) {
 
 function renderStock() {
   const grid = $('#stock-grid');
-  if (!grid.children.length) grid.innerHTML = ITEMS.map(stockCardHTML).join('');
+  const menuSignature = JSON.stringify(
+    ITEMS.map(({ id, name, subtitle, image }) => [id, name, subtitle, image])
+  );
 
-  const stock = Store.get().stock;
+  if (grid.dataset.menuSignature !== menuSignature) {
+    grid.innerHTML = ITEMS.map(stockCardHTML).join('');
+    grid.dataset.menuSignature = menuSignature;
+  }
   let ok = 0, low = 0, out = 0;
   ITEMS.forEach((item) => {
-    const qty = stock[item.id] ?? 0;
+    const qty = item.stock ?? 0;
     const state = stockState(qty);
     if (state.key === 'ok') ok++; else if (state.key === 'low') low++; else out++;
 

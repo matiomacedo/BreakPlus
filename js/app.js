@@ -356,7 +356,7 @@ function onStoreChange() {
   renderHeader();
   renderBarInfo();
 
-  if (changed('menu', [d.stock, d.paused])) {
+  if (changed('menu', [d.stock, d.paused, ITEMS])) {
     renderMenu();
     syncCheckout();                       // se o carrinho estiver aberto: botão e nota (pausa)
   }
@@ -378,7 +378,7 @@ function onStoreChange() {
 /** Regista o estado inicial (sem desenhar) para o primeiro evento só reagir a mudanças reais. */
 function primeStore() {
   const d = db();
-  changed('menu', [d.stock, d.paused]);
+  changed('menu', [d.stock, d.paused, ITEMS]);
   changed('mine', mySignature());
   changed('wallet', d.wallet);
   lastTxCount = d.wallet.transactions.length;

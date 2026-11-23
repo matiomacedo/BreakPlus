@@ -5,6 +5,7 @@
 
 const Store = createStore({
   request: Auth.api,
+  menuPath: '/api/menu',
   statePath: '/api/state',
   cacheKey: 'bp_state_student',
   socketAuth: () => ({ token: Auth.token() }),

@@ -34,7 +34,7 @@ const PERIODS    = ['Todos', 'Destaques', 'Almoço', 'Jantar', 'Bar'];
    - meta:     texto no canto da imagem (tempo, volume...). Opcional.
    - badges:   [{ text, style }] — style: 'veg' (verde), 'warn' (amarelo) ou omitido.
    - periods:  em que filtros de "Período" o prato aparece ("Destaques" = os mais pedidos, calculado). */
-const ITEMS = [
+let ITEMS = [
   {
     id: 1,
     complexity: 4,            // 1–5: usado pela fila com prioridade justa (shared/queue.js)
@@ -129,6 +129,7 @@ const ITEMS = [
     periods: ['Almoço'],
   },
 ];
+const DEFAULT_ITEMS = new Map(ITEMS.map((item) => [String(item.id), item]));
 
 /* Preferências alimentares de cada produto: alimentam os interruptores do ecrã "Mais". */
 const DIETARY = {

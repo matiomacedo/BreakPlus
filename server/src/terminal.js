@@ -24,6 +24,10 @@ function terminalRouter() {
 
   r.use(staffAuth);
 
+  r.get('/menu', wrap(async (_req, res) => {
+    res.json(await Product.find().sort('itemId'));
+  }));
+
   // Estado do bar: todos os pedidos, stock, pausa e fila (sem carteiras nem dados de utilizadores)
   r.get('/state', wrap(async (_req, res) => {
     const [products, set, orders, stats] = await Promise.all([

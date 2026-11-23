@@ -37,7 +37,7 @@ async function requestJson(path, { body, headers = {} } = {}) {
  * cacheKey → opcional: guarda a última resposta em localStorage para abrir sem rede
  * socketAuth() → credenciais do Socket.IO ({ token }); sem isto, só polling
  */
-function createStore({ request, statePath, actions, onConnection = () => {}, cacheKey = null, socketAuth = null }) {
+function createStore({ request, statePath, actions, onConnection = () => {}, cacheKey = null, socketAuth = null, menuPath=null }) {
   const whenText = (ts) => {
     const d = new Date(ts), t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     return d.toDateString() === new Date().toDateString() ? `Hoje · ${t}` : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} · ${t}`;
@@ -71,21 +71,54 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
   const cached = readCache();
   let data = cached ? hydrate(cached) : emptyState();
   let signature = cached ? JSON.stringify(cached) : '';
+  let menuSignature = '';
   const subscribers = new Set();
   const LIVE = ['received', 'preparing', 'ready'];
   let started = false;
 
+  async function refreshMenu() {
+  if (!menuPath) return;
+
+  const menu = await request(menuPath);
+  if (!Array.isArray(menu)) return;
+
+  const nextMenuSignature = JSON.stringify(menu);
+  if (nextMenuSignature === menuSignature) return;
+
+  setMenuFromApi(menu);
+  menuSignature = nextMenuSignature;
+  subscribers.forEach((fn) => fn());
+}
   async function refresh() {
-    const r = await request(statePath);
-    onConnection(!!r.stock, r.reason);
-    if (!r.stock) return;                                   // erro de rede/sessão: mantém o que há
-    const sig = JSON.stringify(r);
-    if (sig === signature) return;
-    signature = sig;
-    data = hydrate(r);
-    writeCache(r);
-    subscribers.forEach((fn) => fn());
+  const [r, menu] = await Promise.all([
+    request(statePath),
+    menuPath ? request(menuPath) : Promise.resolve(null),
+  ]);
+
+  let menuChanged = false;
+  if (Array.isArray(menu)) {
+    const nextMenuSignature = JSON.stringify(menu);
+    if (nextMenuSignature !== menuSignature) {
+      setMenuFromApi(menu);
+      menuSignature = nextMenuSignature;
+      menuChanged = true;
+    }
   }
+
+  onConnection(!!r.stock, r.reason);
+  if (!r.stock) {
+    if (menuChanged) subscribers.forEach((fn) => fn());
+    return;
+  }
+
+  const sig = JSON.stringify(r);
+  if (sig === signature && !menuChanged) return;
+
+  signature = sig;
+  data = hydrate(r);
+  writeCache(r);
+  subscribers.forEach((fn) => fn());
+}
 
   /* Socket.IO: o cliente vem do próprio servidor da API. Se não carregar (sem rede), fica o polling. */
   let live = false;
@@ -127,7 +160,10 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
       await refresh();
       if (started) return;                     // um só temporizador e uma só ligação em tempo real
       started = true;
-      setInterval(() => { if (!live) refresh(); }, 2500);
+      setInterval(() => {
+  if (live) refreshMenu();
+  else refresh();
+}, 2500);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
       connectLive();
     },

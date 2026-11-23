@@ -62,7 +62,7 @@ const ME = { customer: 'Gonçalo Silva', role: 'Estudante', avatar: '' };
 
 const db = () => Store.get();
 const balance = () => db().wallet.balance;
-const stockOf = (id) => db().stock[id] ?? 0;
+const stockOf = (id) => findItem(id)?.stock ?? 0;
 const isPaused = () => db().paused;
 /** "Mais pedido": calculado no servidor a partir dos pedidos reais (vazio sem pedidos suficientes). */
 const isPopular = (id) => (db().popular || []).includes(id);

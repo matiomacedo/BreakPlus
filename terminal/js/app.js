@@ -85,7 +85,7 @@ const ACTIONS = {
     if (writeFailed(await Store.adjustStock(+d.id, +d.delta))) writeError();
   }),
   'stock-toggle': guarded((d) => 'stock:' + d.id, async (d) => {
-    const qty = Store.get().stock[d.id] ?? 0;
+    const qty = findItem(d.id)?.stock ?? 0;
     const name = findItem(d.id)?.name || 'Produto';
     const out = qty > 0;
     if (writeFailed(await Store.setStock(+d.id, out ? 0 : 10))) return writeError();

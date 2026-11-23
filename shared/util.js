@@ -9,7 +9,39 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /* ---------- Pratos e pedidos ---------- */
 
-const findItem = (id) => ITEMS.find((item) => item.id == id);
+const findItem = (id) => ITEMS.find((item) => String(item.id) === String(id)) || {
+  id,
+  name: 'Produto indisponível',
+  price: 0,
+  stock: 0,
+  category: '',
+  periods: [],
+  image: '',
+  subtitle: '',
+  description: '',
+  priceLabel: '',
+  tag: '',
+  badges: [],
+};
+
+function setMenuFromApi(products) {
+  if (!Array.isArray(products)) return;
+
+  ITEMS = products.map((product) => {
+    const defaults = DEFAULT_ITEMS.get(String(product.itemId)) || {};
+
+    return {
+      ...defaults,
+      id: product.itemId,
+      name: product.name ?? defaults.name ?? 'Produto indisponível',
+      price: Number(product.price) || 0,
+      stock: Number(product.stock) || 0,
+      category: product.category ?? defaults.category ?? '',
+      periods: product.periods ?? defaults.periods ?? [],
+      image: product.photo || defaults.image || '',
+    };
+  });
+}
 
 /** items = { [idDoPrato]: quantidade } */
 const itemsTotal = (items) =>
