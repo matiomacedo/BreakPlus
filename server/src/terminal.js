@@ -3,6 +3,7 @@
 const express = require('express');
 const { Product, Order } = require('./models');
 const { fail, wrap } = require('./http');
+const { productOut } = require('./catalogue');
 const { barSettings, queueStats, findOrder, pushAction, ticketOf, cancelOrder, USER_FIELDS, currentCustomer } = require('./orders');
 const push = require('./push');
 const { staffAuth } = require('./auth');
@@ -27,12 +28,13 @@ function terminalRouter() {
   // Estado do bar: todos os pedidos, stock, pausa e fila (sem carteiras nem dados de utilizadores)
   r.get('/state', wrap(async (_req, res) => {
     const [products, set, orders, stats] = await Promise.all([
-      Product.find(), barSettings(),
+      Product.find().sort('itemId'), barSettings(),
       Order.find().sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       queueStats(),
     ]);
     res.json({
       stock: Object.fromEntries(products.map((p) => [p.itemId, p.stock])),
+      products: products.map(productOut),          // o terminal mostra exatamente o que está na BD
       paused: set.paused, ...stats,
       orders: orders.map(terminalOrder),
     });

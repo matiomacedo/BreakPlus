@@ -9,17 +9,21 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /* ---------- Pratos e pedidos ---------- */
 
-const findItem = (id) => ITEMS.find((item) => item.id == id);
+/* Catálogo em uso: o que veio da API (Mongo) quando já carregou; ITEMS só serve
+   para a primeira renderização/offline, até haver uma resposta do servidor. */
+const allItems = () => (Array.isArray(window.BREAKPLUS_PRODUCTS) ? window.BREAKPLUS_PRODUCTS : ITEMS);
+
+const findItem = (id) => allItems().find((item) => item.id == id) || null;
 
 /** items = { [idDoPrato]: quantidade } */
 const itemsTotal = (items) =>
-  Object.entries(items).reduce((sum, [id, qty]) => sum + qty * findItem(id).price, 0);
+  Object.entries(items).reduce((sum, [id, qty]) => sum + qty * (findItem(id)?.price || 0), 0);
 
 const itemsCount = (items) => Object.values(items).reduce((sum, qty) => sum + qty, 0);
 
 /** "2× Tosta Mista..., 1× Sumo..." */
 const itemsSummary = (items) =>
-  Object.entries(items).map(([id, qty]) => `${qty}× ${findItem(id).name}`).join(', ');
+  Object.entries(items).map(([id, qty]) => `${qty}× ${findItem(id)?.name || 'Produto'}`).join(', ');
 
 /* ---------- Datas e horas ---------- */
 

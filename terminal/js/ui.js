@@ -373,13 +373,20 @@ function stockCardHTML(item) {
   </article>`;
 }
 
+let lastStockSignature = '';
+
 function renderStock() {
   const grid = $('#stock-grid');
-  if (!grid.children.length) grid.innerHTML = ITEMS.map(stockCardHTML).join('');
+  const items = allItems();                 // produtos vêm da API (MongoDB), não do ficheiro local
+  const signature = JSON.stringify(items.map((i) => [i.id, i.name, i.subtitle, i.photo]));
+  if (!grid.children.length || signature !== lastStockSignature) {
+    grid.innerHTML = items.map(stockCardHTML).join('');
+    lastStockSignature = signature;
+  }
 
   const stock = Store.get().stock;
   let ok = 0, low = 0, out = 0;
-  ITEMS.forEach((item) => {
+  items.forEach((item) => {
     const qty = stock[item.id] ?? 0;
     const state = stockState(qty);
     if (state.key === 'ok') ok++; else if (state.key === 'low') low++; else out++;

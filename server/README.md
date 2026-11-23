@@ -44,7 +44,8 @@ src/realtime.js   Socket.IO: autenticação das ligações, salas e avisos de mu
 src/orders.js     regras partilhadas: cancelar (reembolso + stock), fila, definições do bar
 src/auth.js       hashes, tokens e middleware de sessão
 src/db.js         transações e verificação do replica set
-src/shared-data.js  lê shared/data.js (produtos e regras das reservas)
+src/shared-data.js  lê shared/data.js (semente dos produtos e regras das reservas)
+src/catalogue.js  completa a BD no arranque e envia os produtos ao aluno/terminal
 src/models.js, src/seed.js
 ```
 

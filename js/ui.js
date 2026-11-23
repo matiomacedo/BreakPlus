@@ -398,10 +398,13 @@ function openGiftEmailSheet() {
 /** 2.º passo: confirmar quem recebe e escrever a mensagem. */
 function openGiftConfirmSheet() {
   const c = state.gift.contact || {};
+  const avatar = avatarSrc(c.avatar);
   openSheet(`
     <h2>Confirmar oferta</h2>
     <div class="gift-contact">
-      <span class="av" aria-hidden="true">${escapeHtml((c.name || '?')[0])}</span>
+      <span class="av" aria-hidden="true">${escapeHtml((c.name || '?')[0])}${avatar
+        ? `<img src="${escapeHtml(avatar)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`
+        : ''}</span>
       <div><b>${escapeHtml(c.name || '')}</b><small>${escapeHtml(c.email || '')}${c.role ? ` · ${escapeHtml(c.role)}` : ''}</small></div>
     </div>
     <label class="gift-label" for="gift-message">Mensagem (opcional)</label>

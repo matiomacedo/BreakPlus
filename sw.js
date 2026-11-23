@@ -14,7 +14,7 @@
    receberem a versão nova.
    ========================================================================== */
 
-const CACHE_VERSION = 'breakplus-v26';
+const CACHE_VERSION = 'breakplus-v27';
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 
@@ -49,6 +49,7 @@ const APP_SHELL = [
   './images/sumo-laranja-natural.png',
   './images/frize.png',
   './images/cafe-nata.png',
+  './images/cafe.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

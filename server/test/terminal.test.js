@@ -2,6 +2,7 @@
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { startServer, stopServer, resetData, call, login, terminal, staff } = require('./helpers');
+const { Product } = require('../src/models');
 
 before(startServer);
 after(stopServer);
@@ -58,6 +59,23 @@ test('a sessão de uma funcionária não serve para as rotas da app dos alunos (
   }
   assert.equal((await call('/api/auth/me', { token })).body.user.role, 'staff');
   assert.equal((await terminal('/state')).body.stock[1], 10);              // nada foi pedido
+});
+
+test('o terminal mostra os produtos que vêm da BD, incluindo a foto do café', async () => {
+  await Product.updateOne({ itemId: 1 }, { $set: {
+    name: 'Tosta da casa', photo: 'images/custom.png', subtitle: 'Especial da casa',
+  } });
+  await Product.create({ itemId: 7, name: 'Café', price: 0.7, photo: 'images/cafe.png', stock: 20 });
+
+  const s = await terminal('/state');
+  const tosta = s.body.products.find((p) => p.itemId === 1);
+  const coffee = s.body.products.find((p) => p.itemId === 7);
+  assert.deepEqual(
+    [tosta.name, tosta.price, tosta.photo, tosta.subtitle],
+    ['Tosta da casa', 2.2, 'images/custom.png', 'Especial da casa'],
+  );
+  assert.deepEqual([coffee.name, coffee.price, coffee.photo], ['Café', 0.7, 'images/cafe.png']);
+  assert.equal(coffee._id, undefined);
 });
 
 test('a funcionária entra com o mesmo login em 2 passos e o papel "staff"', async () => {

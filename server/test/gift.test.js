@@ -40,6 +40,38 @@ test('o arranque cria o café canónico sem alterar preço, nome ou stock já co
   assert.equal(state.body.giftPrice, 0.7);
 });
 
+test('o catálogo da API vem da BD: completa o que falta e não apaga o que está configurado', async () => {
+  await Product.updateOne({ itemId: 1 }, { $set: {
+    name: 'Tosta da casa', price: 9.99, category: 'Pastelaria',
+    periods: ['Jantar'], photo: 'images/custom.png', stock: 3,
+  }, $unset: { subtitle: '', description: '', badges: '', dietary: '' } });
+
+  await ensureCatalogue();                             // cria os que faltam e completa os vazios
+  assert.equal(await ensureCatalogue(), 0);            // idempotente
+  const tosta = await Product.findOne({ itemId: 1 }).lean();
+  assert.deepEqual(
+    [tosta.name, tosta.price, tosta.category, tosta.periods, tosta.photo, tosta.stock],
+    ['Tosta da casa', 9.99, 'Pastelaria', ['Jantar'], 'images/custom.png', 3],
+  );
+  assert.equal(tosta.subtitle, 'Tostas especiais');    // fallback local só onde a BD não tem nada
+  assert.deepEqual(tosta.dietary, []);
+
+  const coffee = await Product.findOne({ itemId: 7 }).lean();
+  assert.equal(coffee.photo, 'images/cafe.png');        // foto que o utilizador adicionou
+  assert.equal(coffee.subtitle, 'Café');
+
+  const token = await login();
+  const state = await call('/api/state', { token, method: 'GET' });
+  const p1 = state.body.products.find((p) => p.itemId === 1);
+  const p7 = state.body.products.find((p) => p.itemId === 7);
+  assert.deepEqual([p1.name, p1.price, p1.photo], ['Tosta da casa', 9.99, 'images/custom.png']);
+  assert.deepEqual([p7.name, p7.price, p7.photo, p7.subtitle], ['Café Espresso', 0.8, 'images/cafe.png', 'Café']);
+  assert.equal(p7._id, undefined);                      // o cliente não recebe ids internos
+
+  const menu = await call('/api/menu', { token, method: 'GET' });
+  assert.equal(menu.body.find((p) => p.itemId === 7).photo, 'images/cafe.png');
+});
+
 test('oferecer desconta quem oferece; levantar não desconta quem recebe e só aí desce o stock', async () => {
   const giver = await login();
   const ana = await login('ana@demo.pt', 'demo1234', '4321');

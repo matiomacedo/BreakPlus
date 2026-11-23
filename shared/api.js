@@ -30,6 +30,40 @@ async function requestJson(path, { body, headers = {} } = {}) {
   return { status: res.status, data };
 }
 
+/* ---------- Catálogo: o que a API devolve é a fonte verdadeira ---------- */
+
+/** Produto da BD → objeto que as duas apps sabem desenhar. Campos ausentes ficam vazios
+    (o placeholder das vistas entra em ação); não se inventam dados locais aqui. */
+function normalizeProduct(p) {
+  const price = Number(p.price);
+  const photo = String(p.photo || p.image || '').trim();
+  return {
+    ...p,
+    id: p.itemId ?? p.id,
+    itemId: p.itemId ?? p.id,
+    name: p.name || 'Produto',
+    price: Number.isFinite(price) ? price : 0,
+    category: p.category || '',
+    periods: Array.isArray(p.periods) ? p.periods : [],
+    photo,
+    image: photo,
+    subtitle: p.subtitle || '',
+    description: p.description || '',
+    priceLabel: p.priceLabel || '',
+    meta: p.meta || '',
+    tag: p.tag || '',
+    tagStyle: p.tagStyle || '',
+    badges: Array.isArray(p.badges) ? p.badges : [],
+    dietary: Array.isArray(p.dietary) ? p.dietary : [],
+  };
+}
+
+/** Só é chamado quando a resposta (ou a cache) traz `products`: uma lista vazia
+    também é válida e não deve fazer a app recorrer ao catálogo antigo. */
+function setProducts(products) {
+  window.BREAKPLUS_PRODUCTS = Array.isArray(products) ? products.map(normalizeProduct) : null;
+}
+
 /**
  * request(path, body?) → resposta JSON do servidor
  * actions({ request, post, withOrder }) → ações de escrita desta app (ficam no objeto devolvido)
@@ -58,18 +92,22 @@ function createStore({ request, statePath, actions, onConnection = () => {}, cac
   })) });
   const emptyState = () => ({
     stock: {}, paused: false, queueSize: 0, avgPrepSec: null,
-    wallet: { balance: 0, transactions: [] }, orders: [],
+    products: [], wallet: { balance: 0, transactions: [] }, orders: [],
     gifts: { received: [], sent: [] },
   });
-  const hydrate = (r) => ({
-    ...r,
-    orders: Array.isArray(r.orders) ? r.orders.map(normOrder) : [],
-    wallet: r.wallet ? normWallet(r.wallet) : emptyState().wallet,
-    gifts: {
-      received: Array.isArray(r.gifts?.received) ? r.gifts.received.map(normGift) : [],
-      sent: Array.isArray(r.gifts?.sent) ? r.gifts.sent.map(normGift) : [],
-    },
-  });
+  const hydrate = (r) => {
+    if (Array.isArray(r.products)) setProducts(r.products);   // API/Atlas manda no catálogo
+    return {
+      ...r,
+      products: Array.isArray(r.products) ? r.products.map(normalizeProduct) : [],
+      orders: Array.isArray(r.orders) ? r.orders.map(normOrder) : [],
+      wallet: r.wallet ? normWallet(r.wallet) : emptyState().wallet,
+      gifts: {
+        received: Array.isArray(r.gifts?.received) ? r.gifts.received.map(normGift) : [],
+        sent: Array.isArray(r.gifts?.sent) ? r.gifts.sent.map(normGift) : [],
+      },
+    };
+  };
 
   /** Última resposta boa (para a app abrir com dados quando não há rede). */
   function readCache() {

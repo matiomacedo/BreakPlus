@@ -228,7 +228,7 @@ scripts/
   build-config.js     build da Vercel: copia o frontend para dist/ e gera os config.js
 vercel.json           build e pasta publicada na Vercel
 server/               API (ver server/README.md)
-images/               logótipo e fotos dos pratos (nomes em shared/data.js)
+images/               logótipo e fotos dos pratos (caminhos vêm da BD; shared/data.js só semeia/faz fallback)
 ProfilePictureUser/   fotografias de perfil (avatar dos utilizadores)
 ```
 

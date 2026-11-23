@@ -17,6 +17,13 @@ const Product = model('Product', new Schema({
   itemId: { type: Number, required: true, unique: true },  // id usado no front (ITEMS)
   name: String, price: Number, category: String, periods: [String], photo: String,
   stock: { type: Number, default: 0, min: 0 },
+  /* Informação de apresentação: passa a vir da BD como o resto. O arranque preenche
+     só os campos que faltam, sem sobrescrever nomes/preços/fotos configurados no Atlas. */
+  subtitle: String, description: String, priceLabel: String, meta: String,
+  tag: String, tagStyle: String,
+  complexity: Number, prepMin: Number,
+  badges: [{ _id: false, text: String, style: String }],
+  dietary: [String],
 }));
 
 const OrderSchema = new Schema({

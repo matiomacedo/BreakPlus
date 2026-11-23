@@ -85,7 +85,7 @@ function visibleItems() {
   const needs = Object.entries(state.prefs)
     .filter(([key, on]) => on && ['vegetarian', 'glutenFree', 'lactoseFree'].includes(key))
     .map(([key]) => key);
-  return ITEMS.filter((item) =>
+  return allItems().filter((item) =>
     (state.category === 'Todos' || item.category === state.category) &&
     (state.period === 'Todos' || (state.period === 'Destaques' ? isPopular(item.id) : item.periods.includes(state.period))) &&
     needs.every((need) => (item.dietary || []).includes(need))

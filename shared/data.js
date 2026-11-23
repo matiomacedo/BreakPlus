@@ -139,7 +139,7 @@ const ITEMS = [
     id: 7,
     complexity: 1,
     prepMin: 1,
-    image: '',                 // ícone neutro; a foto não é precisa para um espresso
+    image: 'images/cafe.png',  // foto do café; se faltar, aparece o ícone neutro
     category: 'Bebidas',
     subtitle: 'Café',
     name: 'Café Espresso',
@@ -169,4 +169,12 @@ const TOPUP_AMOUNTS = [5, 10, 20, 50];
 /* As fotos estão em images/ na raiz do projeto. A app do terminal vive em terminal/,
    por isso o <html> dela tem data-base="../" para os caminhos continuarem a funcionar. */
 const ASSET_BASE = document.documentElement.dataset.base || '';
-const imageUrl = (item) => (item.image ? ASSET_BASE + item.image : '');
+
+/** Foto do produto: a foto da BD (`photo`) manda; `image` é só o fallback local. */
+function imageUrl(item) {
+  const src = String(item?.photo || item?.image || '').trim();
+  if (!src) return '';
+  // URLs completas, caminhos absolutos e data URIs não levam a pasta de assets.
+  if (/^(?:[a-z]+:)?\/\//i.test(src) || src.startsWith('/') || src.startsWith('data:')) return src;
+  return ASSET_BASE + src;
+}

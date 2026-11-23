@@ -8,6 +8,7 @@ const { inTx } = require('./db');
 const { fail, wrap } = require('./http');
 const { r2, barSettings, queueStats, popularItems, clearPopularCache, cancelOrder, USER_FIELDS, orderOut, nextOrderTicket } = require('./orders');
 const { refundExpired, giftOut } = require('./gifts');
+const { productOut } = require('./catalogue');
 const push = require('./push');
 const realtime = require('./realtime');
 const { clock, lisbonDateKey, lisbonEpoch, toMinutes } = require('./time');
@@ -158,7 +159,7 @@ function studentRouter() {
     const me = refunded.some((id) => String(id) === String(req.user._id))
       ? await User.findById(req.user._id) : req.user;
     const [products, set, orders, txs, received, sent, stats, popular, slots] = await Promise.all([
-      Product.find(), barSettings(),
+      Product.find().sort('itemId'), barSettings(),
       Order.find({ user: req.user._id }).sort({ number: -1 }).limit(200).populate('user', USER_FIELDS),
       Transaction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50),
       Gift.find({ to: req.user._id }).sort({ createdAt: -1 }).limit(50),
@@ -171,6 +172,7 @@ function studentRouter() {
     const giftFallback = ITEMS.find((i) => i.id === GIFT.itemId)?.price ?? 0.8;
     res.json({
       stock: Object.fromEntries(products.map((p) => [p.itemId, p.stock])),
+      products: products.map(productOut),          // nomes, fotos e textos vêm da BD (Atlas)
       giftPrice: r2(giftProduct?.price ?? giftFallback),
       paused: set.paused, ...stats, popular, slots,
       wallet: { balance: me.balance, transactions: txs },
@@ -182,7 +184,8 @@ function studentRouter() {
   // Ocupação das horas de reserva de hoje (as reservas são só para o dia atual)
   r.get('/slots', studentAuth, wrap(async (_req, res) => res.json({ ok: true, ...(await slotsToday()) })));
 
-  r.get('/menu', studentAuth, wrap(async (_req, res) => res.json(await Product.find().sort('itemId'))));
+  r.get('/menu', studentAuth, wrap(async (_req, res) =>
+    res.json((await Product.find().sort('itemId')).map(productOut))));
   r.get('/orders/mine', studentAuth, wrap(async (req, res) => {
     const orders = await Order.find({ user: req.user._id }).sort({ number: -1 }).populate('user', USER_FIELDS);
     res.json(orders.map((o) => orderOut(o, req.user._id)));

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { User, Product, Order, Transaction, Setting, Slot } = require('./models');
 const { hash } = require('./auth');
 const { loadSharedData } = require('./shared-data');
+const { ensureCatalogue } = require('./catalogue');
 
 (async () => {
   await mongoose.connect(process.env.MONGODB_URI);
@@ -12,6 +13,7 @@ const { loadSharedData } = require('./shared-data');
     itemId: i.id, name: i.name, price: i.price, category: i.category,
     periods: i.periods, photo: i.image || '', stock: i.stock ?? 20,
   })));
+  await ensureCatalogue();   // completa subtitle/descrição/fotos/etc. na base de dados nova
   // Contas de demonstração (muda as passwords/PINs antes de qualquer deploy)
   await User.create([
     { name: 'Gonçalo Silva', role: 'student', roleLabel: 'Estudante', email: 'aluno@demo.pt', passwordHash: hash('demo1234'), pinHash: hash('1234'), balance: 12.5, avatar: '/ProfilePictureUser/goncalo.svg' },
