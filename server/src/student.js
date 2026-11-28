@@ -227,6 +227,7 @@ function studentRouter() {
     const out = await inTx(async (session) => {
       const set = await barSettings({}, session);
       if (type === 'now' && set.paused) throw fail('paused');
+      if (type === 'now' && !barIsOpen()) throw fail('closed');
       if (reservation) await takeSlot(pickupKey, pickupTime, session);
       let total = 0;
       for (const [id, qty] of Object.entries(items)) {
