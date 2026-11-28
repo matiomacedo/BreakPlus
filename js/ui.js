@@ -85,7 +85,29 @@ function renderHeader() {
 function renderBarInfo() {
   const hours = `${BAR.open}–${BAR.close}`;
   $('#bar-name').textContent = BAR.name;
-  $('#bar-hours').textContent = isPaused() ? `Pedidos na hora em pausa · ${hours}` : `${BAR.status} · ${hours}`;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Lisbon',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+}).formatToParts(new Date());
+
+const hour = parts.find((p) => p.type === 'hour').value;
+const minute = parts.find((p) => p.type === 'minute').value;
+const current = toMinutes(`${hour}:${minute}`);
+const open = toMinutes(BAR.open);
+const close = toMinutes(BAR.close);
+const openNow = open <= close
+  ? current >= open && current < close
+  : current >= open || current < close;
+
+const status = isPaused()
+  ? `Pedidos na hora em pausa`
+  : openNow
+    ? 'Aberto agora'
+    : `Fechado · abre às ${BAR.open}`;
+
+$('#bar-hours').textContent = `${status} · ${hours}`;
   $('#bar-wait').textContent = 'Fila: ' + Store.waitText();
   $('#paused-note').hidden = !isPaused();
   document.querySelector('.cap .dot').classList.toggle('paused', isPaused());
