@@ -7,8 +7,7 @@
    A fila atual (tempo de espera) é calculada pelo servidor a partir dos pedidos em curso (ver shared/api.js). */
 const BAR = {
   name: 'Bar Central ESTG',
-  status: 'Aberto agora',
-  open: '08:00',
+  open: '8:00',
   close: '20:00',
   prep: '~5 min',
 };

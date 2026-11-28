@@ -14,6 +14,25 @@ const PREFS_BASE = 'bp_prefs_student';
 let prefsKey = PREFS_BASE;
 const DEFAULT_PREFS = { vegetarian: false, glutenFree: false, lactoseFree: false, notifications: true };
 
+function barIsOpenNow(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Lisbon',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+
+  const hour = parts.find((p) => p.type === 'hour').value;
+  const minute = parts.find((p) => p.type === 'minute').value;
+  const current = toMinutes(`${hour}:${minute}`);
+  const open = toMinutes(BAR.open);
+  const close = toMinutes(BAR.close);
+
+  return open <= close
+    ? current >= open && current < close
+    : current >= open || current < close;
+}
+
 function loadPrefs() {
   const prefs = { ...DEFAULT_PREFS };
   try {
@@ -24,6 +43,7 @@ function loadPrefs() {
   } catch { /* localStorage indisponível: usa os valores por omissão */ }
   return prefs;
 }
+
 
 function persistPrefs() {
   try { localStorage.setItem(prefsKey, JSON.stringify(state.prefs)); } catch { /* sem armazenamento */ }

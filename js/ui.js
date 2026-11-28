@@ -643,12 +643,16 @@ function renderSlots() {
 function syncCheckout() {
   const seg = $('#mode-seg');
   if (!seg) return;
+  if (!barIsOpenNow() && state.checkout.mode === 'now') {
+  state.checkout.mode = 'reserve';
+}
   const { mode, time } = state.checkout;
   const reserve = mode === 'reserve';
 
   seg.dataset.mode = mode;
   seg.querySelectorAll('button').forEach((b) => setChip(b, b.dataset.mode === mode));
-
+  seg.querySelector('[data-mode="now"]').disabled = !barIsOpenNow();
+  
   const box = $('#reserve-box');
   box.classList.toggle('open', reserve);
   box.inert = !reserve;

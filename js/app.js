@@ -126,7 +126,7 @@ const ACTIONS = {
     flashAdded(el);
   },
   'open-cart': () => {
-    state.checkout.mode = isPaused() ? 'reserve' : 'now';     // com o bar em pausa, sugere reservar
+      state.checkout.mode = (isPaused() || !barIsOpenNow()) ? 'reserve' : 'now'; 
     openCartSheet();
   },
   'change-qty': (d) => {
