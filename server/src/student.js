@@ -29,6 +29,25 @@ function pickupError(pickupKey, pickupTime, now = clock.now()) {
   const minuteNow = Math.floor(now / 60000) * 60000;
   return lisbonEpoch(pickupKey, pickupTime) - minuteNow < RESERVATION.minLeadMin * 60000 ? 'lead' : null;
 }
+function barIsOpen(now = clock.now()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Lisbon',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(now));
+
+  const hour = parts.find((p) => p.type === 'hour').value;
+  const minute = parts.find((p) => p.type === 'minute').value;
+  const current = toMinutes(`${hour}:${minute}`);
+  const open = toMinutes(BAR.open);
+  const close = toMinutes(BAR.close);
+
+  // Também funciona se o horário atravessar a meia-noite.
+  return open <= close
+    ? current >= open && current < close
+    : current >= open || current < close;
+}
 
 /** Hora de levantamento (ms) calculada no servidor (o `pickupAt` do cliente é ignorado); null se não servir. */
 const pickupAtFor = (pickupKey, pickupTime, now = clock.now()) =>
