@@ -104,6 +104,19 @@ test('pedir agora desconta o saldo e o stock e entra na fila como "received"', a
   assert.equal(s.body.queueSize, 1);
 });
 
+test('pedir agora quando o bar está fechado é recusado', async () => {
+  clock.now = () => at('03:00');
+  const token = await login();
+
+  const r = await call('/api/orders', {
+    token,
+    body: { type: 'now', items: { 1: 1 } },
+  });
+
+  assert.equal(r.status, 400);
+  assert.equal(r.body.reason, 'closed');
+});
+
 test('o primeiro pedido do dia recebe a senha 1 e as seguintes sobem; o número único continua a crescer', async () => {
   const token = await login();
   const a = (await call('/api/orders', { token, body: { type: 'now', items: { 1: 1 } } })).body.order;
